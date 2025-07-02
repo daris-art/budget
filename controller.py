@@ -134,3 +134,17 @@ class BudgetController:
     def handle_show_graph(self):
         # AMÉLIORATION: Passe une fonction "callback" à la vue pour qu'elle puisse obtenir des données fraîches à tout moment.
         self.view.show_graph_window(self.model.get_graph_data)
+
+    def handle_save_as(self):
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("Fichiers JSON", "*.json")],
+            title="Enregistrer sous..."
+        )
+
+        if file_path:
+            success, message = self.model.save_data(file_path)
+            if success:
+                self.view.status_var.set(f"✔ Sauvegardé dans : {file_path}")
+            else:
+                self.view.status_var.set(f"❌ Erreur : {message}")

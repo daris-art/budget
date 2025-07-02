@@ -34,7 +34,7 @@ class BudgetView:
         style.configure("Title.TLabel", font=("Arial", 12, "bold"))
         style.configure("Header.TLabel", font=("Arial", 10, "underline"))
         style.configure("Result.TLabel", font=("Arial", 14, "bold"))
-        style.configure("TotalDepenses.TLabel", font=("Arial", 12, "bold"), foreground="purple")
+        style.configure("TotalDepenses.TLabel", font=("Arial", 14, "bold"), foreground="purple")
         style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
         style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10))
@@ -45,7 +45,7 @@ class BudgetView:
 
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("800x800")
+        self.master.geometry("1000x800")
         self.master.minsize(800, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
@@ -82,10 +82,12 @@ class BudgetView:
         action_frame.pack(fill=tk.X, pady=5)
         ttk.Button(action_frame, text="Ajouter une dépense", command=self.controller.handle_add_expense, style="Green.TButton").pack(side=tk.LEFT, padx=(0, 10))
         # Ajout du bouton Sauvegarder qui manquait dans cette version
-        ttk.Button(action_frame, text="Sauvegarder", command=self.controller.handle_save, style="Blue.TButton").pack(side=tk.LEFT)
         ttk.Button(action_frame, text="Trier par Montant", command=self.controller.handle_sort, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
         ttk.Button(action_frame, text="Voir Graphique", command=self.controller.handle_show_graph, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Charger un Fichier", command=self.controller.handle_load_file, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Ouvrir", command=self.controller.handle_load_file, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Enregistrer", command=self.controller.handle_save, style="Blue.TButton").pack(side=tk.LEFT)
+        ttk.Button(action_frame, text="Enregistrer sous...", command=self.controller.handle_save_as, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
+
 
 
         summary_frame = ttk.Frame(main_frame, padding="10 0")
@@ -211,14 +213,8 @@ class GraphWindow(tk.Toplevel):
         """ self.attributes('-fullscreen', True) """
         self.minsize(1000, 700) 
         self.update_idletasks()
-        
-        
         self.geometry("1200x800+50+50")  # Taille raisonnable avec un léger décalage
-
-
         self.bind("<Escape>", lambda e: self.destroy())
-
-
 
         self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
@@ -260,12 +256,7 @@ class GraphWindow(tk.Toplevel):
 
         self._create_stats_frame(info_frame, values, argent_restant, salaire)
 
-        button_frame = ttk.Frame(info_frame)
-        button_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Button(button_frame, text="Actualiser", command=self.draw_content).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Fermer", command=self.destroy).pack(side=tk.RIGHT, padx=5)
-
+        
     def _create_stats_frame(self, parent, values, argent_restant, salaire):
         total_depenses = sum(values)
         depense_moyenne = total_depenses / len(values) if values else 0
