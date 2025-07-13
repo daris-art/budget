@@ -10,6 +10,7 @@ class Depense:
     nom: str = ""
     montant: float = 0.0
     categorie: str = "Autres"
+    effectue: bool = False 
 
 class BudgetModel:
     """
@@ -46,23 +47,32 @@ class BudgetModel:
 
     def get_argent_restant(self):
         return self.salaire - self.get_total_depenses()
+    
+    def get_total_depenses_effectuees(self):
+        """Calcule la somme des dépenses marquées comme effectuées."""
+        return sum(d.montant for d in self.depenses if d.effectue)
+        
+    def get_total_depenses_non_effectuees(self):
+        """
+        NOUVEAU: Calcule la somme des dépenses non encore effectuées.
+        """
+        return sum(d.montant for d in self.depenses if not d.effectue)
 
-    def add_expense(self, nom="", montant=0.0, categorie="Autres"):
+    def add_expense(self, nom="", montant=0.0, categorie="Autres", effectue=False):
         # AMÉLIORATION: Ajoute un objet Depense.
-        self.depenses.append(Depense(nom=nom, montant=montant, categorie=categorie))
+        self.depenses.append(Depense(nom=nom, montant=montant, categorie=categorie, effectue=effectue))
         
     def remove_expense(self, index):
         if 0 <= index < len(self.depenses):
             del self.depenses[index]
             
-    def update_expense(self, index, nom, montant, categorie):
+    def update_expense(self, index, nom, montant, categorie, effectue):
         if 0 <= index < len(self.depenses):
             try:
                 montant_float = float(montant)
             except (ValueError, TypeError):
                 montant_float = 0.0
-            # AMÉLIORATION: Met à jour l'objet Depense existant.
-            self.depenses[index] = Depense(nom, montant_float, categorie)
+            self.depenses[index] = Depense(nom, montant_float, categorie, effectue)
 
     def sort_depenses(self):
         self.depenses.sort(key=lambda d: d.montant, reverse=True)

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from view import BudgetView #, GraphWindow # AMÉLIORATION: Importe GraphWindow
 from datetime import datetime
 
+
 class BudgetController:
     """
     Fait le lien entre la Vue et le Modèle.
@@ -15,8 +16,7 @@ class BudgetController:
         self.view = BudgetView(master, self)
         self.master = master
         
-        # AMÉLIORATION: Configuration de la sauvegarde automatique.
-        self.autosave_interval = 60000  # en millisecondes (60 secondes)
+        self.autosave_interval = 60000 
         self.autosave_job = None
         
         self.handle_initial_load()
@@ -24,16 +24,16 @@ class BudgetController:
         self.schedule_autosave()
 
     def _refresh_view(self):
-        """Met à jour toute la vue à partir du modèle."""
         self.view.set_display_salaire(self.model.salaire)
-        # AMÉLIORATION: Passe la liste des catégories à la vue.
         self.view.redraw_expenses(self.model.depenses, self.model.categories)
         self.update_summary()
 
     def update_summary(self):
         total = self.model.get_total_depenses()
+        total_effectue = self.model.get_total_depenses_effectuees()
+        total_non_effectue = self.model.get_total_depenses_non_effectuees()
         restant = self.model.get_argent_restant()
-        self.view.update_summary(total, restant)
+        self.view.update_summary(total, restant, total_effectue, total_non_effectue)
         
     def handle_initial_load(self):
         success, message = self.model.load_data()
@@ -41,36 +41,30 @@ class BudgetController:
         self._refresh_view()
 
     def handle_on_closing(self):
-        self.handle_save() # Sauvegarde une dernière fois avant de fermer.
+        self.handle_save()
         if self.autosave_job:
             self.master.after_cancel(self.autosave_job)
         plt.close('all')
         self.view.master.destroy()
         
-    # AMÉLIORATION: Logique de sauvegarde automatique et manuelle.
     def schedule_autosave(self):
-        """Planifie la prochaine sauvegarde automatique."""
         if self.autosave_job:
             self.master.after_cancel(self.autosave_job)
         self.autosave_job = self.master.after(self.autosave_interval, self.handle_autosave)
 
     def handle_autosave(self):
         self.handle_save(is_auto=True)
-        self.schedule_autosave() # Re-planifie la prochaine
+        self.schedule_autosave()
 
     def handle_save_as(self):
-        """Ouvre une boîte de dialogue pour choisir où sauvegarder le fichier."""
         filepath = filedialog.asksaveasfilename(
             title="Sauvegarder le budget sous...",
             defaultextension=".json",
             filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")]
         )
-        # Si l'utilisateur annule, filepath sera vide.
         if not filepath:
             self.view.update_status("Sauvegarde annulée.")
             return
-
-        # On appelle la méthode de sauvegarde du modèle AVEC le nouveau chemin
         success, message = self.model.save_data(filepath)
         self.view.update_status(message)
         
@@ -89,10 +83,9 @@ class BudgetController:
         self.update_summary()
 
     def handle_expense_update(self, index):
-        # AMÉLIORATION: Récupère et met à jour la catégorie.
-        nom, montant_str, categorie = self.view.get_expense_value(index)
+        nom, montant_str, categorie, effectue = self.view.get_expense_value(index)
         if nom is not None:
-            self.model.update_expense(index, nom, montant_str, categorie)
+            self.model.update_expense(index, nom, montant_str, categorie, effectue)
             self.update_summary()
             
     def handle_add_expense(self):
@@ -132,19 +125,4 @@ class BudgetController:
             self._refresh_view()
             
     def handle_show_graph(self):
-        # AMÉLIORATION: Passe une fonction "callback" à la vue pour qu'elle puisse obtenir des données fraîches à tout moment.
         self.view.show_graph_window(self.model.get_graph_data)
-
-    def handle_save_as(self):
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("Fichiers JSON", "*.json")],
-            title="Enregistrer sous..."
-        )
-
-        if file_path:
-            success, message = self.model.save_data(file_path)
-            if success:
-                self.view.status_var.set(f"✔ Sauvegardé dans : {file_path}")
-            else:
-                self.view.status_var.set(f"❌ Erreur : {message}")

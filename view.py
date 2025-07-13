@@ -6,12 +6,31 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 from datetime import datetime, timedelta
 
+class Tooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, event):
+        x, y, cx, cy = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 20
+        y += self.widget.winfo_rooty() + 20
+        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip.wm_overrideredirect(True)
+        label = tk.Label(self.tooltip, text=self.text, bg="lightyellow", relief=tk.SOLID, borderwidth=1)
+        label.pack()
+        self.tooltip.wm_geometry("+%d+%d" % (x, y))
+
+    def hide(self, event):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+
+
 class BudgetView:
-    """
-    Gère l'interface graphique (widgets). Ne contient pas de logique métier.
-    Communique uniquement avec le contrôleur.
-    (Version avancée conservée)
-    """
     def __init__(self, master, controller):
         self.master = master
         self.controller = controller
@@ -20,6 +39,9 @@ class BudgetView:
 
         self.salaire_var = tk.StringVar()
         self.total_depenses_var = tk.StringVar(value="Total Dépenses : 0.00 €")
+        self.total_effectue_var = tk.StringVar(value="Total Effectué : 0.00 €")
+        # NOUVEAU: Ajout du StringVar pour les dépenses non effectuées
+        self.total_non_effectue_var = tk.StringVar(value="Dépenses non effectuées : 0.00 €")
         self.argent_restant_var = tk.StringVar(value="Argent restant : 0.00 €")
         self.status_var = tk.StringVar()
         
@@ -34,7 +56,10 @@ class BudgetView:
         style.configure("Title.TLabel", font=("Arial", 12, "bold"))
         style.configure("Header.TLabel", font=("Arial", 10, "underline"))
         style.configure("Result.TLabel", font=("Arial", 14, "bold"))
-        style.configure("TotalDepenses.TLabel", font=("Arial", 14, "bold"), foreground="purple")
+        style.configure("TotalDepenses.TLabel", font=("Arial", 13, "bold"), foreground="purple")
+        # NOUVEAU: Style optionnel pour le nouveau label
+        style.configure("Effectue.TLabel", font=("Arial", 12, "bold"))
+        style.configure("NonEffectue.TLabel", font=("Arial", 12, "bold"), foreground="#E74C3C")
         style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
         style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10))
@@ -43,14 +68,30 @@ class BudgetView:
         style.map("Green.TButton", background=[('active', '#45a049')])
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
 
+        style.map('TCombobox', fieldbackground=[('readonly', 'white')])
+        style.map('TCombobox', selectbackground=[('readonly', 'blue')]) # Bonus: couleur de sélection
+        style.map('TCombobox', selectforeground=[('readonly', 'white')]) # Bonus: couleur du texte sélectionné
+
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("1000x800")
+        self.master.geometry("900x860")
         self.master.minsize(800, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # 📁 Section Gestion de fichier (au-dessus du salaire)
+        fichier_frame = ttk.Frame(main_frame)
+        fichier_frame.pack(fill=tk.X, pady=(0, 5))
+        bouton_ouvrir = ttk.Button(fichier_frame, text="📂 Ouvrir", command=self.controller.handle_load_file, style="Blue.TButton")
+        bouton_ouvrir.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_ouvrir, "Importer un fichier de budget existant.")
+
+        bouton_enregistrer = ttk.Button(fichier_frame, text="💾 Enregistrer sous...", command=self.controller.handle_save_as, style="Blue.TButton")
+        bouton_enregistrer.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_enregistrer, "Enregistrer le budget actuel dans un nouveau fichier.")
+
+        # 💰 Saisie du salaire
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
         ttk.Label(salary_frame, text="Votre Salaire (€) :", style="Title.TLabel").pack(side=tk.LEFT, padx=(0, 10))
@@ -58,15 +99,16 @@ class BudgetView:
         self.entree_salaire = ttk.Entry(salary_frame, textvariable=self.salaire_var, validate="key", validatecommand=validate_cmd)
         self.entree_salaire.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        # 📊 Zone des dépenses
         expenses_main_frame = ttk.LabelFrame(main_frame, text="Vos Dépenses Mensuelles (€)", style="Title.TLabel", padding="10")
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         header_frame = ttk.Frame(expenses_main_frame)
         header_frame.pack(fill=tk.X)
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, expand=True, fill=tk.X)
-        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel", width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel", width=15).pack(side=tk.LEFT)
-        ttk.Label(header_frame, width=5).pack(side=tk.LEFT)
+        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel", width=18).pack(side=tk.LEFT, padx=(10, 0))
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel", width=12).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Label(header_frame, text="Effectué", style="Header.TLabel", width=10).pack(side=tk.LEFT, padx=(5, 0))
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.scrollable_frame = ttk.Frame(canvas)
@@ -78,130 +120,147 @@ class BudgetView:
         self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind('<Configure>', lambda e: canvas.itemconfig(canvas_frame, width=e.width))
 
+        # 🎯 Actions principales (boutons réorganisés)
         action_frame = ttk.Frame(main_frame)
         action_frame.pack(fill=tk.X, pady=5)
-        ttk.Button(action_frame, text="Ajouter une dépense", command=self.controller.handle_add_expense, style="Green.TButton").pack(side=tk.LEFT, padx=(0, 10))
-        # Ajout du bouton Sauvegarder qui manquait dans cette version
-        ttk.Button(action_frame, text="Trier par Montant", command=self.controller.handle_sort, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Voir Graphique", command=self.controller.handle_show_graph, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Ouvrir", command=self.controller.handle_load_file, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Enregistrer", command=self.controller.handle_save, style="Blue.TButton").pack(side=tk.LEFT)
-        ttk.Button(action_frame, text="Enregistrer sous...", command=self.controller.handle_save_as, style="Blue.TButton").pack(side=tk.LEFT, padx=5)
+        bouton_ajouter = ttk.Button(action_frame, text="➕ Ajouter une dépense", command=self.controller.handle_add_expense, style="Green.TButton")
+        bouton_ajouter.pack(side=tk.LEFT, padx=(0, 10))
+        Tooltip(bouton_ajouter, "Ajouter une dépense mensuelle à la liste.")
+
+        bouton_trier = ttk.Button(action_frame, text="🔽 Trier par Montant", command=self.controller.handle_sort, style="Blue.TButton")
+        bouton_trier.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_trier, "Trier les dépenses par montant décroissant.")
+
+        bouton_graph = ttk.Button(action_frame, text="📈 Voir Graphique", command=self.controller.handle_show_graph, style="Blue.TButton")
+        bouton_graph.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses.")
 
 
-
+        # 📊 Résumé en bas
         summary_frame = ttk.Frame(main_frame, padding="10 0")
         summary_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        self.label_total_depenses = ttk.Label(summary_frame, textvariable=self.total_depenses_var, style="TotalDepenses.TLabel")
-        self.label_total_depenses.pack(anchor="w")
-        self.label_resultat = ttk.Label(summary_frame, textvariable=self.argent_restant_var, style="Result.TLabel")
-        self.label_resultat.pack(anchor="w", pady=(5, 10))
-        ttk.Button(summary_frame, text="Réinitialiser Tout", command=self.controller.handle_reset, style="Red.TButton").pack(fill=tk.X, pady=(5, 0))
         
+        line1_frame = ttk.Frame(summary_frame)
+        line1_frame.pack(fill=tk.X, pady=(5,0))
+        self.label_total_depenses = ttk.Label(line1_frame, textvariable=self.total_depenses_var, style="TotalDepenses.TLabel")
+        self.label_total_depenses.pack(side=tk.LEFT, anchor="w")
+        self.label_total_effectue = ttk.Label(line1_frame, textvariable=self.total_effectue_var, style="Effectue.TLabel")
+        self.label_total_effectue.pack(side=tk.RIGHT, anchor="e")
+
+        line2_frame = ttk.Frame(summary_frame)
+        line2_frame.pack(fill=tk.X, pady=(2, 10))
+        self.label_resultat = ttk.Label(line2_frame, textvariable=self.argent_restant_var, style="Result.TLabel")
+        self.label_resultat.pack(side=tk.LEFT, anchor="w")
+        self.label_total_non_effectue = ttk.Label(line2_frame, textvariable=self.total_non_effectue_var, style="NonEffectue.TLabel")
+        self.label_total_non_effectue.pack(side=tk.RIGHT, anchor="e")
+        
+        # 🔄 Réinitialiser
+        bouton_reset = ttk.Button(summary_frame, text="🔄 Réinitialiser Tout", command=self.controller.handle_reset, style="Red.TButton")
+        bouton_reset.pack(fill=tk.X, pady=(5, 0))
+        Tooltip(bouton_reset, "Réinitialiser toutes les données saisies.")
+
         status_bar = ttk.Frame(self.master, relief=tk.SUNKEN, padding="2 5")
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.status_label = ttk.Label(status_bar, textvariable=self.status_var, style="Status.TLabel")
         self.status_label.pack(side=tk.LEFT)
 
+    
+    # NOUVEAU: La méthode update_summary accepte maintenant la nouvelle valeur
+    def update_summary(self, total, restant, total_effectue, total_non_effectue):
+        """Met à jour les labels de résumé avec les nouvelles valeurs."""
+        self.total_depenses_var.set(f"Total Dépenses : {total:,.2f} €".replace(',', ' '))
+        self.argent_restant_var.set(f"Argent restant : {restant:,.2f} €".replace(',', ' '))
+        self.total_effectue_var.set(f"Total Effectué : {total_effectue:,.2f} €".replace(',', ' '))
+        self.total_non_effectue_var.set(f"Non effectué : {total_non_effectue:,.2f} €".replace(',', ' '))
+
+        # Coloration du résultat
+        if restant < 0:
+            self.label_resultat.config(foreground="red")
+        else:
+            self.label_resultat.config(foreground="green")
+
+    def get_expense_value(self, index):
+        """Récupère les valeurs d'une ligne de dépense spécifique."""
+        if 0 <= index < len(self.depenses_widgets):
+            widgets = self.depenses_widgets[index]
+            nom = widgets['nom_var'].get()
+            montant = widgets['montant_var'].get().replace(',', '.')
+            categorie = widgets['categorie_var'].get()
+            effectue = widgets['effectue_var'].get()
+            return nom, montant, categorie, effectue
+        return None, None, None, None
+        
+    def redraw_expenses(self, depenses, categories):
+        for widget_dict in self.depenses_widgets:
+            widget_dict['frame'].destroy()
+        self.depenses_widgets = []
+
+        for i, depense in enumerate(depenses):
+            expense_frame = ttk.Frame(self.scrollable_frame)
+            expense_frame.pack(fill=tk.X, pady=2)
+
+            nom_var = tk.StringVar(value=depense.nom)
+            montant_var = tk.StringVar(value=f"{depense.montant:.2f}")
+            categorie_var = tk.StringVar(value=depense.categorie)
+            effectue_var = tk.BooleanVar(value=depense.effectue)
+            
+            widgets = {
+                'frame': expense_frame, 'nom_var': nom_var, 'montant_var': montant_var, 
+                'categorie_var': categorie_var, 'effectue_var': effectue_var
+            }
+            self.depenses_widgets.append(widgets)
+            
+            # --- Création des widgets pour la ligne de dépense ---
+            nom_entry = ttk.Entry(expense_frame, textvariable=nom_var)
+            nom_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
+            
+            cat_combo = ttk.Combobox(expense_frame, textvariable=categorie_var, values=categories, width=15, state="readonly")
+            cat_combo.pack(side=tk.LEFT, padx=(10, 0))
+
+            validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
+            montant_entry = ttk.Entry(expense_frame, textvariable=montant_var, width=10, justify='right', validate="key", validatecommand=validate_cmd)
+            montant_entry.pack(side=tk.LEFT, padx=(5, 0))
+            
+            check_effectue = ttk.Checkbutton(expense_frame, variable=effectue_var, onvalue=True, offvalue=False)
+            check_effectue.pack(side=tk.LEFT, padx=(20, 10))
+
+            remove_button = ttk.Button(expense_frame, text="X", width=3, style="Red.TButton", 
+                                       command=lambda i=i: self.controller.handle_remove_expense(i))
+            remove_button.pack(side=tk.RIGHT)
+            
+            # --- Liaison des événements ---
+            callback = lambda *args, index=i: self.controller.handle_expense_update(index)
+            nom_var.trace_add("write", callback)
+            montant_var.trace_add("write", callback)
+            categorie_var.trace_add("write", callback)
+            effectue_var.trace_add("write", callback)
+
+    def set_display_salaire(self, salaire):
+        current_val = self.salaire_var.get().replace(',', '.')
+        if current_val != f"{salaire:.2f}":
+            self.salaire_var.set(f"{salaire:.2f}")
+    
+    def ask_confirmation(self, title, message):
+        return messagebox.askyesno(title, message)
+
+    def update_status(self, message):
+        self.status_var.set(message)
+    
     def _validate_numeric_input(self, value_if_allowed):
-        if value_if_allowed == "" or value_if_allowed == "-": return True
+        if value_if_allowed == "": return True
         try:
+            # Permettre la virgule ou le point comme séparateur décimal
             float(value_if_allowed.replace(',', '.'))
             return True
         except ValueError:
             return False
 
-    def redraw_expenses(self, expenses_data, categories):
-        for widget_dict in self.depenses_widgets:
-            widget_dict['frame'].destroy()
-        self.depenses_widgets.clear()
-        
-        validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
-        
-        for i, dep in enumerate(expenses_data):
-            row_frame = ttk.Frame(self.scrollable_frame)
-            row_frame.pack(fill=tk.X, pady=2, padx=2)
-
-            nom_var = tk.StringVar(value=dep.nom)
-            montant_var = tk.StringVar(value=str(dep.montant).replace('.', ','))
-            categorie_var = tk.StringVar(value=dep.categorie)
-            
-            nom_entry = ttk.Entry(row_frame, textvariable=nom_var)
-            nom_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
-            
-            categorie_combo = ttk.Combobox(row_frame, width=13, textvariable=categorie_var, values=categories)
-            categorie_combo.pack(side=tk.LEFT, padx=5)
-
-            montant_entry = ttk.Entry(row_frame, width=15, textvariable=montant_var, validate="key", validatecommand=validate_cmd)
-            montant_entry.pack(side=tk.LEFT, padx=(0, 5))
-            
-            callback = lambda *args, index=i: self.controller.handle_expense_update(index)
-            nom_var.trace_add("write", callback)
-            montant_var.trace_add("write", callback)
-            categorie_var.trace_add("write", callback)
-            categorie_combo.bind("<<ComboboxSelected>>", callback)
-
-            delete_button = ttk.Button(row_frame, text="X", width=2, style="Red.TButton", command=lambda index=i: self.controller.handle_remove_expense(index))
-            delete_button.pack(side=tk.LEFT)
-
-            self.depenses_widgets.append({
-                'frame': row_frame, 
-                'nom_var': nom_var, 
-                'montant_var': montant_var,
-                'categorie_var': categorie_var
-            })
-
-    def update_summary(self, total, restant):
-        self.total_depenses_var.set(f"Total Dépenses : {total:.2f} €".replace('.', ','))
-        self.argent_restant_var.set(f"Argent restant : {restant:.2f} €".replace('.', ','))
-        self.label_resultat.config(foreground="green" if restant >= 0 else "red")
-    
-    def update_status(self, message):
-        self.status_var.set(message)
-
-    def set_display_salaire(self, salaire):
-        current_val = str(salaire).replace('.',',')
-        if self.salaire_var.get() != current_val:
-            # Pour éviter une boucle infinie avec trace_add, on désactive temporairement le traçage
-            trace_info = self.salaire_var.trace_info()
-            if trace_info:
-                self.salaire_var.trace_vdelete("w", trace_info[0][1])
-                self.salaire_var.set(current_val)
-                self.salaire_var.trace_add("write", self.controller.handle_salaire_update)
-            else:
-                self.salaire_var.set(current_val)
-                
-    def get_expense_value(self, index):
-        if 0 <= index < len(self.depenses_widgets):
-            widgets = self.depenses_widgets[index]
-            nom = widgets['nom_var'].get()
-            montant_str = widgets['montant_var'].get().replace(',', '.')
-            categorie = widgets['categorie_var'].get()
-            return nom, montant_str, categorie
-        return None, None, None
-
-    def display_message(self, title, message, type='info'):
-        if type == 'error': messagebox.showerror(title, message)
-        elif type == 'warning': messagebox.showwarning(title, message)
-        else: messagebox.showinfo(title, message)
-
-    def ask_confirmation(self, title, message):
-        return messagebox.askyesno(title, message)
-        
     def show_graph_window(self, get_data_callback):
         if self.graph_window and self.graph_window.winfo_exists():
             self.graph_window.lift()
-            self.graph_window.focus()
             return
-            
-        labels, values, argent_restant, categories_data = get_data_callback()
-        
-        if not labels or not values:
-            self.display_message("Graphique", "Aucune dépense valide à afficher.", "warning")
-            return
-            
+        # Crée la fenêtre si elle n'existe pas
         self.graph_window = GraphWindow(self.master, get_data_callback)
-
 
 class GraphWindow(tk.Toplevel):
     def __init__(self, master, get_data_callback):
