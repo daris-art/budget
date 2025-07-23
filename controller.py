@@ -2,7 +2,8 @@
 
 from tkinter import filedialog
 import matplotlib.pyplot as plt
-from view import BudgetView #, GraphWindow # AMÉLIORATION: Importe GraphWindow
+from pathlib import Path # Importer Path
+from view import BudgetView
 from datetime import datetime
 
 
@@ -33,15 +34,31 @@ class BudgetController:
         total_effectue = self.model.get_total_depenses_effectuees()
         total_non_effectue = self.model.get_total_depenses_non_effectuees()
         restant = self.model.get_argent_restant()
-        self.view.update_summary(total, restant, total_effectue, total_non_effectue)
+        total_emprunte = self.model.get_total_emprunte()
+        self.view.update_summary(total, restant, total_effectue, total_non_effectue, total_emprunte)
         
+    # AMÉLIORATION: Charge le dernier fichier utilisé au démarrage
     def handle_initial_load(self):
-        success, message = self.model.load_data()
-        self.view.update_status(message if success else f"Erreur: {message}")
+        """Tente de charger le dernier fichier utilisé, sinon charge le fichier par défaut."""
+        last_file_path = self.model.load_last_file_path()
+        
+        # Essayer de charger le dernier fichier s'il existe
+        if last_file_path and last_file_path.exists():
+            success, message = self.model.load_data(last_file_path)
+        else:
+            # Sinon, charger le fichier par défaut
+            success, message = self.model.load_data()
+            
+        self.view.update_status(message)
         self._refresh_view()
 
+    # AMÉLIORATION: Sauvegarde le chemin du fichier actuel avant de fermer
     def handle_on_closing(self):
+        """Sauvegarde les données et la configuration avant de fermer l'application."""
         self.handle_save()
+        # Enregistre le chemin du fichier actuellement utilisé pour la prochaine session
+        self.model.save_last_file_path(self.model.data_file)
+        
         if self.autosave_job:
             self.master.after_cancel(self.autosave_job)
         plt.close('all')
@@ -83,9 +100,9 @@ class BudgetController:
         self.update_summary()
 
     def handle_expense_update(self, index):
-        nom, montant_str, categorie, effectue = self.view.get_expense_value(index)
+        nom, montant_str, categorie, effectue, emprunte = self.view.get_expense_value(index)
         if nom is not None:
-            self.model.update_expense(index, nom, montant_str, categorie, effectue)
+            self.model.update_expense(index, nom, montant_str, categorie, effectue, emprunte)
             self.update_summary()
             
     def handle_add_expense(self):
@@ -121,7 +138,7 @@ class BudgetController:
         if self.view.ask_confirmation("Confirmer le chargement", 
                                    "Charger ce fichier écrasera les données actuelles. Continuer ?"):
             success, message = self.model.load_data(filepath)
-            self.view.update_status(message if success else f"Erreur: {message}")
+            self.view.update_status(message)
             self._refresh_view()
             
     def handle_show_graph(self):

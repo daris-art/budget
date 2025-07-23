@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 class Tooltip:
+    # ... (code identique) ...
     def __init__(self, widget, text):
         self.widget = widget
         self.text = text
@@ -40,9 +41,9 @@ class BudgetView:
         self.salaire_var = tk.StringVar()
         self.total_depenses_var = tk.StringVar(value="Total Dépenses : 0.00 €")
         self.total_effectue_var = tk.StringVar(value="Total Effectué : 0.00 €")
-        # NOUVEAU: Ajout du StringVar pour les dépenses non effectuées
         self.total_non_effectue_var = tk.StringVar(value="Dépenses non effectuées : 0.00 €")
         self.argent_restant_var = tk.StringVar(value="Argent restant : 0.00 €")
+        self.total_emprunte_var = tk.StringVar(value="Total Emprunté : 0.00 €")
         self.status_var = tk.StringVar()
         
         self.salaire_var.trace_add("write", self.controller.handle_salaire_update)
@@ -57,9 +58,9 @@ class BudgetView:
         style.configure("Header.TLabel", font=("Arial", 10, "underline"))
         style.configure("Result.TLabel", font=("Arial", 14, "bold"))
         style.configure("TotalDepenses.TLabel", font=("Arial", 13, "bold"), foreground="purple")
-        # NOUVEAU: Style optionnel pour le nouveau label
         style.configure("Effectue.TLabel", font=("Arial", 12, "bold"))
         style.configure("NonEffectue.TLabel", font=("Arial", 12, "bold"), foreground="#E74C3C")
+        style.configure("Emprunte.TLabel", font=("Arial", 10, "bold"), foreground="#007bff")
         style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
         style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10))
@@ -67,20 +68,38 @@ class BudgetView:
         style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 10, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
+        
+        # ### SECTION MODIFIÉE : STYLES DES CHECKBOX ###
+        # Style pour la checkbox "Effectué" (Payé)
+        style.configure("Effectue.TCheckbutton", font=("Arial", 10))
+        style.map("Effectue.TCheckbutton",
+                  # Vert si sélectionné, blanc sinon
+                  indicatorcolor=[('selected', '#28a745'), ('!selected', 'white')],
+                  # Fond légèrement grisé au survol
+                  background=[('active', '#e9ecef')])
+
+        # Style pour la checkbox "Emprunté"
+        style.configure("Emprunte.TCheckbutton", font=("Arial", 10))
+        style.map("Emprunte.TCheckbutton",
+                  # Bleu si sélectionné, blanc sinon
+                  indicatorcolor=[('selected', '#007bff'), ('!selected', 'white')],
+                  # Fond légèrement grisé au survol (identique pour la cohérence)
+                  background=[('active', '#e9ecef')])
+        # ### FIN DE LA SECTION MODIFIÉE ###
 
         style.map('TCombobox', fieldbackground=[('readonly', 'white')])
-        style.map('TCombobox', selectbackground=[('readonly', 'blue')]) # Bonus: couleur de sélection
-        style.map('TCombobox', selectforeground=[('readonly', 'white')]) # Bonus: couleur du texte sélectionné
+        style.map('TCombobox', selectbackground=[('readonly', 'blue')])
+        style.map('TCombobox', selectforeground=[('readonly', 'white')])
+
 
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("900x860")
-        self.master.minsize(800, 600)
+        self.master.geometry("950x860")
+        self.master.minsize(850, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 📁 Section Gestion de fichier (au-dessus du salaire)
         fichier_frame = ttk.Frame(main_frame)
         fichier_frame.pack(fill=tk.X, pady=(0, 5))
         bouton_ouvrir = ttk.Button(fichier_frame, text="📂 Ouvrir", command=self.controller.handle_load_file, style="Blue.TButton")
@@ -91,7 +110,6 @@ class BudgetView:
         bouton_enregistrer.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_enregistrer, "Enregistrer le budget actuel dans un nouveau fichier.")
 
-        # 💰 Saisie du salaire
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
         ttk.Label(salary_frame, text="Votre Salaire (€) :", style="Title.TLabel").pack(side=tk.LEFT, padx=(0, 10))
@@ -99,16 +117,16 @@ class BudgetView:
         self.entree_salaire = ttk.Entry(salary_frame, textvariable=self.salaire_var, validate="key", validatecommand=validate_cmd)
         self.entree_salaire.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # 📊 Zone des dépenses
         expenses_main_frame = ttk.LabelFrame(main_frame, text="Vos Dépenses Mensuelles (€)", style="Title.TLabel", padding="10")
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         header_frame = ttk.Frame(expenses_main_frame)
-        header_frame.pack(fill=tk.X)
-        ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, expand=True, fill=tk.X)
-        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel", width=18).pack(side=tk.LEFT, padx=(10, 0))
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel", width=12).pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Label(header_frame, text="Effectué", style="Header.TLabel", width=10).pack(side=tk.LEFT, padx=(5, 0))
+        header_frame.pack(fill=tk.X, padx=(0, 17)) 
+        ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 00))
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.LEFT, padx=(60, 0))
+        ttk.Label(header_frame, text="Effectué", style="Header.TLabel").pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Label(header_frame, text="Emprunté", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 10))
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.scrollable_frame = ttk.Frame(canvas)
@@ -120,7 +138,6 @@ class BudgetView:
         self.scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind('<Configure>', lambda e: canvas.itemconfig(canvas_frame, width=e.width))
 
-        # 🎯 Actions principales (boutons réorganisés)
         action_frame = ttk.Frame(main_frame)
         action_frame.pack(fill=tk.X, pady=5)
         bouton_ajouter = ttk.Button(action_frame, text="➕ Ajouter une dépense", command=self.controller.handle_add_expense, style="Green.TButton")
@@ -135,8 +152,6 @@ class BudgetView:
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses.")
 
-
-        # 📊 Résumé en bas
         summary_frame = ttk.Frame(main_frame, padding="10 0")
         summary_frame.pack(fill=tk.X, side=tk.BOTTOM)
         
@@ -154,7 +169,11 @@ class BudgetView:
         self.label_total_non_effectue = ttk.Label(line2_frame, textvariable=self.total_non_effectue_var, style="NonEffectue.TLabel")
         self.label_total_non_effectue.pack(side=tk.RIGHT, anchor="e")
         
-        # 🔄 Réinitialiser
+        line3_frame = ttk.Frame(summary_frame)
+        line3_frame.pack(fill=tk.X, pady=(2, 5))
+        self.label_total_emprunte = ttk.Label(line3_frame, textvariable=self.total_emprunte_var, style="Emprunte.TLabel")
+        self.label_total_emprunte.pack(side=tk.LEFT, anchor="w")
+
         bouton_reset = ttk.Button(summary_frame, text="🔄 Réinitialiser Tout", command=self.controller.handle_reset, style="Red.TButton")
         bouton_reset.pack(fill=tk.X, pady=(5, 0))
         Tooltip(bouton_reset, "Réinitialiser toutes les données saisies.")
@@ -164,31 +183,28 @@ class BudgetView:
         self.status_label = ttk.Label(status_bar, textvariable=self.status_var, style="Status.TLabel")
         self.status_label.pack(side=tk.LEFT)
 
-    
-    # NOUVEAU: La méthode update_summary accepte maintenant la nouvelle valeur
-    def update_summary(self, total, restant, total_effectue, total_non_effectue):
-        """Met à jour les labels de résumé avec les nouvelles valeurs."""
+    def update_summary(self, total, restant, total_effectue, total_non_effectue, total_emprunte):
         self.total_depenses_var.set(f"Total Dépenses : {total:,.2f} €".replace(',', ' '))
         self.argent_restant_var.set(f"Argent restant : {restant:,.2f} €".replace(',', ' '))
         self.total_effectue_var.set(f"Total Effectué : {total_effectue:,.2f} €".replace(',', ' '))
         self.total_non_effectue_var.set(f"Non effectué : {total_non_effectue:,.2f} €".replace(',', ' '))
+        self.total_emprunte_var.set(f"Total Emprunté : {total_emprunte:,.2f} €".replace(',', ' '))
 
-        # Coloration du résultat
         if restant < 0:
             self.label_resultat.config(foreground="red")
         else:
             self.label_resultat.config(foreground="green")
 
     def get_expense_value(self, index):
-        """Récupère les valeurs d'une ligne de dépense spécifique."""
         if 0 <= index < len(self.depenses_widgets):
             widgets = self.depenses_widgets[index]
             nom = widgets['nom_var'].get()
             montant = widgets['montant_var'].get().replace(',', '.')
             categorie = widgets['categorie_var'].get()
             effectue = widgets['effectue_var'].get()
-            return nom, montant, categorie, effectue
-        return None, None, None, None
+            emprunte = widgets['emprunte_var'].get()
+            return nom, montant, categorie, effectue, emprunte
+        return None, None, None, None, None
         
     def redraw_expenses(self, depenses, categories):
         for widget_dict in self.depenses_widgets:
@@ -197,20 +213,21 @@ class BudgetView:
 
         for i, depense in enumerate(depenses):
             expense_frame = ttk.Frame(self.scrollable_frame)
-            expense_frame.pack(fill=tk.X, pady=2)
+            expense_frame.pack(fill=tk.X, pady=2, padx=2)
 
             nom_var = tk.StringVar(value=depense.nom)
             montant_var = tk.StringVar(value=f"{depense.montant:.2f}")
             categorie_var = tk.StringVar(value=depense.categorie)
             effectue_var = tk.BooleanVar(value=depense.effectue)
+            emprunte_var = tk.BooleanVar(value=depense.emprunte)
             
             widgets = {
                 'frame': expense_frame, 'nom_var': nom_var, 'montant_var': montant_var, 
-                'categorie_var': categorie_var, 'effectue_var': effectue_var
+                'categorie_var': categorie_var, 'effectue_var': effectue_var,
+                'emprunte_var': emprunte_var
             }
             self.depenses_widgets.append(widgets)
             
-            # --- Création des widgets pour la ligne de dépense ---
             nom_entry = ttk.Entry(expense_frame, textvariable=nom_var)
             nom_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
             
@@ -221,19 +238,29 @@ class BudgetView:
             montant_entry = ttk.Entry(expense_frame, textvariable=montant_var, width=10, justify='right', validate="key", validatecommand=validate_cmd)
             montant_entry.pack(side=tk.LEFT, padx=(5, 0))
             
-            check_effectue = ttk.Checkbutton(expense_frame, variable=effectue_var, onvalue=True, offvalue=False)
+            # ### SECTION MODIFIÉE : APPLICATION DES STYLES ###
+            # Application du nouveau style "Effectue.TCheckbutton"
+            check_effectue = ttk.Checkbutton(expense_frame, variable=effectue_var, onvalue=True, offvalue=False, style="Effectue.TCheckbutton")
             check_effectue.pack(side=tk.LEFT, padx=(20, 10))
+            Tooltip(check_effectue, "Cochez si cette dépense a été payée.")
+
+            # Le style "Emprunte.TCheckbutton" est déjà appliqué
+            check_emprunte = ttk.Checkbutton(expense_frame, variable=emprunte_var, onvalue=True, offvalue=False, style="Emprunte.TCheckbutton")
+            check_emprunte.pack(side=tk.LEFT, padx=(30, 10))
+            Tooltip(check_emprunte, "Cochez si cette dépense est un prêt.")
+            # ### FIN DE LA SECTION MODIFIÉE ###
+
 
             remove_button = ttk.Button(expense_frame, text="X", width=3, style="Red.TButton", 
                                        command=lambda i=i: self.controller.handle_remove_expense(i))
-            remove_button.pack(side=tk.RIGHT)
+            remove_button.pack(side=tk.RIGHT, padx=(10, 0))
             
-            # --- Liaison des événements ---
             callback = lambda *args, index=i: self.controller.handle_expense_update(index)
             nom_var.trace_add("write", callback)
             montant_var.trace_add("write", callback)
             categorie_var.trace_add("write", callback)
             effectue_var.trace_add("write", callback)
+            emprunte_var.trace_add("write", callback)
 
     def set_display_salaire(self, salaire):
         current_val = self.salaire_var.get().replace(',', '.')
@@ -249,7 +276,6 @@ class BudgetView:
     def _validate_numeric_input(self, value_if_allowed):
         if value_if_allowed == "": return True
         try:
-            # Permettre la virgule ou le point comme séparateur décimal
             float(value_if_allowed.replace(',', '.'))
             return True
         except ValueError:
@@ -259,32 +285,25 @@ class BudgetView:
         if self.graph_window and self.graph_window.winfo_exists():
             self.graph_window.lift()
             return
-        # Crée la fenêtre si elle n'existe pas
         self.graph_window = GraphWindow(self.master, get_data_callback)
 
 class GraphWindow(tk.Toplevel):
+    # ... (le code de GraphWindow est identique à l'original)
     def __init__(self, master, get_data_callback):
         super().__init__(master)
         self.get_data_callback = get_data_callback
         
         self.title("Analyse Complète des Dépenses")
-
-        """ self.attributes('-fullscreen', True) """
         self.minsize(1000, 700) 
         self.update_idletasks()
-        self.geometry("1200x800+50+50")  # Taille raisonnable avec un léger décalage
+        self.geometry("1200x800+50+50")
         self.bind("<Escape>", lambda e: self.destroy())
 
         self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        """ self.transient(master)
-        self.grab_set() """
-
         self.draw_content()
 
     def draw_content(self):
-        """Dessine ou redessine tout le contenu de la fenêtre graphique."""
         for widget in self.main_frame.winfo_children():
             widget.destroy()
         plt.close('all')
@@ -297,7 +316,6 @@ class GraphWindow(tk.Toplevel):
             messagebox.showwarning("Graphique", "Plus de données à afficher.")
             return
 
-        # Frame centrale avec Canvas pour gérer les débordements si nécessaire
         content_frame = ttk.Frame(self.main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -309,7 +327,6 @@ class GraphWindow(tk.Toplevel):
         self._create_trends_tab(notebook, labels, values, categories_data)
         self._create_comparison_tab(notebook, labels, values, argent_restant, salaire, categories_data)
 
-        # Zone infos + boutons bien visibles
         info_frame = ttk.Frame(self.main_frame)
         info_frame.pack(fill=tk.X, padx=10, pady=(5, 10), anchor="s")
 
@@ -347,7 +364,6 @@ class GraphWindow(tk.Toplevel):
         fig = plt.Figure(figsize=(12, 8))
         fig.suptitle('Vue d\'ensemble de votre Budget', fontsize=16, fontweight='bold')
         
-        # Graphique en secteurs des catégories
         ax1 = fig.add_subplot(2, 2, 1)
         if categories_data:
             cat_labels = list(categories_data.keys())
@@ -360,9 +376,8 @@ class GraphWindow(tk.Toplevel):
             ax1.text(0.5, 0.5, "Pas de catégories", ha='center', va='center')
             ax1.set_title('Répartition par Catégories', fontweight='bold')
         
-        # Graphique en barres des dépenses individuelles
         ax2 = fig.add_subplot(2, 2, 2)
-        sorted_data = sorted(zip(labels, values), key=lambda x: x[1], reverse=True)[:10]  # Top 10
+        sorted_data = sorted(zip(labels, values), key=lambda x: x[1], reverse=True)[:10]
         if sorted_data:
             sorted_labels, sorted_values = zip(*sorted_data)
             bars = ax2.bar(range(len(sorted_labels)), sorted_values, 
@@ -373,7 +388,6 @@ class GraphWindow(tk.Toplevel):
             ax2.set_ylabel('Montant (€)')
             ax2.set_title('Top 10 des Dépenses', fontweight='bold')
         
-        # Graphique de répartition budget vs dépenses
         ax3 = fig.add_subplot(2, 2, 3)
         budget_data = ['Dépenses', 'Argent restant'] if argent_restant >= 0 else ['Dépenses', 'Déficit']
         budget_values = [sum(values), abs(argent_restant)]
@@ -388,16 +402,13 @@ class GraphWindow(tk.Toplevel):
             ax3.text(bar.get_x() + bar.get_width()/2., height,
                     f'{height:.0f}€', ha='center', va='bottom')
         
-        # Camembert des dépenses individuelles par montant
         ax4 = fig.add_subplot(2, 2, 4)
         if labels and values:
             total = sum(values)
             colors = plt.cm.Pastel2(np.linspace(0, 1, len(values)))
-
             def make_label(pct, all_vals):
                 absolute = int(round(pct / 100. * np.sum(all_vals)))
                 return f"{absolute}€"
-
             wedges, texts, autotexts = ax4.pie(
                 values,
                 labels=[label[:20] + '...' if len(label) > 20 else label for label in labels],
@@ -410,8 +421,6 @@ class GraphWindow(tk.Toplevel):
         else:
             ax4.text(0.5, 0.5, "Aucune dépense", ha='center', va='center')
             ax4.set_title("Répartition des Dépenses par Libellé", fontweight="bold")
-
-            
         
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         
@@ -503,7 +512,7 @@ class GraphWindow(tk.Toplevel):
         tab_frame = ttk.Frame(notebook)
         notebook.add(tab_frame, text="📊 Tendances")
         
-        plt.rcParams['font.family'] = 'DejaVu Sans'  # ou une autre comme 'Arial Unicode MS'
+        plt.rcParams['font.family'] = 'DejaVu Sans'
 
         fig = plt.Figure(figsize=(12, 8))
         fig.suptitle('Analyse des Tendances', fontsize=16, fontweight='bold')
@@ -662,7 +671,6 @@ class GraphWindow(tk.Toplevel):
         ax3.legend()
         ax3.grid(True, alpha=0.3)
         
-        # ### LIGNE CORRIGÉE CI-DESSOUS ###
         ax4 = fig.add_subplot(2, 2, 4, projection='polar')
         
         ratios = {
@@ -676,13 +684,13 @@ class GraphWindow(tk.Toplevel):
                 ratios[f'{cat} / Total'] = (value / total_spending * 100) if total_spending > 0 else 0
         
         theta = np.linspace(0.0, 2 * np.pi, len(ratios), endpoint=False)
-        radii = [max(0, r) for r in ratios.values()] # Assurer que les rayons ne sont pas négatifs
+        radii = [max(0, r) for r in ratios.values()]
         
         bars = ax4.bar(theta, radii, width=0.5, alpha=0.7, color=plt.cm.viridis(np.linspace(0, 1, len(ratios))))
         
         ax4.set_theta_zero_location('N')
         ax4.set_theta_direction(-1)
-        ax4.set_rlabel_position(-22.5) # Position des étiquettes de rayon
+        ax4.set_rlabel_position(-22.5)
         ax4.set_thetagrids(np.degrees(theta), list(ratios.keys()))
         ax4.set_title('Ratios Financiers (%)', fontweight='bold', pad=20)
         
