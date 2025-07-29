@@ -77,7 +77,8 @@ class BudgetController:
         filepath = filedialog.asksaveasfilename(
             title="Sauvegarder le budget sous...",
             defaultextension=".json",
-            filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")]
+            filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")],
+            initialdir="~/.BudgetApp"
         )
         if not filepath:
             self.view.update_status("Sauvegarde annulée.")
@@ -131,7 +132,8 @@ class BudgetController:
     def handle_load_file(self):
         filepath = filedialog.askopenfilename(
             title="Ouvrir un fichier de budget",
-            filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")]
+            filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")],
+            initialdir="~/.BudgetApp"
         )
         if not filepath: return
 

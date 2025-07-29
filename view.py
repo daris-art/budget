@@ -71,7 +71,7 @@ class BudgetView:
         
         # ### SECTION MODIFIÉE : STYLES DES CHECKBOX ###
         # Style pour la checkbox "Effectué" (Payé)
-        style.configure("Effectue.TCheckbutton", font=("Arial", 10))
+        style.configure("Effectue.TCheckbutton", font=("Arial", 11))
         style.map("Effectue.TCheckbutton",
                   # Vert si sélectionné, blanc sinon
                   indicatorcolor=[('selected', '#28a745'), ('!selected', 'white')],
@@ -79,23 +79,23 @@ class BudgetView:
                   background=[('active', '#e9ecef')])
 
         # Style pour la checkbox "Emprunté"
-        style.configure("Emprunte.TCheckbutton", font=("Arial", 10))
+        style.configure("Emprunte.TCheckbutton", font=("Arial", 11))
         style.map("Emprunte.TCheckbutton",
                   # Bleu si sélectionné, blanc sinon
                   indicatorcolor=[('selected', '#007bff'), ('!selected', 'white')],
                   # Fond légèrement grisé au survol (identique pour la cohérence)
                   background=[('active', '#e9ecef')])
         # ### FIN DE LA SECTION MODIFIÉE ###
+        style.configure("StatusFrame.TFrame", borderwith = 1)
 
         style.map('TCombobox', fieldbackground=[('readonly', 'white')])
         style.map('TCombobox', selectbackground=[('readonly', 'blue')])
         style.map('TCombobox', selectforeground=[('readonly', 'white')])
 
-
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("950x860")
-        self.master.minsize(850, 600)
+        self.master.geometry("960x930")
+        self.master.minsize(860, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -121,12 +121,12 @@ class BudgetView:
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         header_frame = ttk.Frame(expenses_main_frame)
-        header_frame.pack(fill=tk.X, padx=(0, 17)) 
+        header_frame.pack(fill=tk.X, padx=(0, 17), pady=(0, 2)) 
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 00))
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.LEFT, padx=(60, 0))
-        ttk.Label(header_frame, text="Effectué", style="Header.TLabel").pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Label(header_frame, text="Emprunté", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 320))
+        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
+        #ttk.Label(header_frame, text="Effectué", style="Header.TLabel").pack(side=tk.LEFT, padx=(5, 0))
+        #ttk.Label(header_frame, text="Emprunté", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 10))
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.scrollable_frame = ttk.Frame(canvas)
@@ -237,19 +237,21 @@ class BudgetView:
             validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
             montant_entry = ttk.Entry(expense_frame, textvariable=montant_var, width=10, justify='right', validate="key", validatecommand=validate_cmd)
             montant_entry.pack(side=tk.LEFT, padx=(5, 0))
+
+            status_frame = ttk.Frame(expense_frame, padding="5 2", style="StatusFrame.TFrame")
+            status_frame.pack(side=tk.LEFT, padx=(2, 0))
+
             
-            # ### SECTION MODIFIÉE : APPLICATION DES STYLES ###
-            # Application du nouveau style "Effectue.TCheckbutton"
-            check_effectue = ttk.Checkbutton(expense_frame, variable=effectue_var, onvalue=True, offvalue=False, style="Effectue.TCheckbutton")
-            check_effectue.pack(side=tk.LEFT, padx=(20, 10))
+
+            check_effectue = ttk.Checkbutton(status_frame, text=" ✔️ Payée", variable=effectue_var,
+                                            onvalue=True, offvalue=False, style="Effectue.TCheckbutton")
+            check_effectue.pack(side=tk.LEFT, padx=(8, 8))
             Tooltip(check_effectue, "Cochez si cette dépense a été payée.")
 
-            # Le style "Emprunte.TCheckbutton" est déjà appliqué
-            check_emprunte = ttk.Checkbutton(expense_frame, variable=emprunte_var, onvalue=True, offvalue=False, style="Emprunte.TCheckbutton")
-            check_emprunte.pack(side=tk.LEFT, padx=(30, 10))
+            check_emprunte = ttk.Checkbutton(status_frame, text=" 💸 Empruntée", variable=emprunte_var,
+                                            onvalue=True, offvalue=False, style="Emprunte.TCheckbutton")
+            check_emprunte.pack(side=tk.LEFT)
             Tooltip(check_emprunte, "Cochez si cette dépense est un prêt.")
-            # ### FIN DE LA SECTION MODIFIÉE ###
-
 
             remove_button = ttk.Button(expense_frame, text="X", width=3, style="Red.TButton", 
                                        command=lambda i=i: self.controller.handle_remove_expense(i))

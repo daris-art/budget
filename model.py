@@ -59,8 +59,6 @@ class BudgetModel:
             # Gérer l'erreur de manière silencieuse pour ne pas bloquer l'app
             print(f"Erreur lors de la sauvegarde de la configuration : {e}")
 
-    # ... (Le reste des méthodes du modèle reste inchangé) ...
-
     def set_salaire(self, salaire):
         try:
             self.salaire = float(salaire)
