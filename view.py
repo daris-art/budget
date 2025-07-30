@@ -102,14 +102,39 @@ class BudgetView:
 
         fichier_frame = ttk.Frame(main_frame)
         fichier_frame.pack(fill=tk.X, pady=(0, 5))
-        bouton_ouvrir = ttk.Button(fichier_frame, text="📂 Ouvrir", command=self.controller.handle_load_file, style="Blue.TButton")
-        bouton_ouvrir.pack(side=tk.LEFT, padx=5)
-        Tooltip(bouton_ouvrir, "Importer un fichier de budget existant.")
+        
+        bouton_charger_mois = ttk.Button(fichier_frame, 
+            text="📂 Charger Mois", 
+            command=self.controller.handle_load_mois, 
+            style="Blue.TButton"
+        )
+        bouton_charger_mois.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_charger_mois, "Charger un budget mensuel existant")
 
+        bouton_nouveau_mois = ttk.Button(
+            fichier_frame, 
+            text="➕ Nouveau Mois", 
+            command=self.controller.handle_create_new_mois, 
+            style="Green.TButton"
+        )
+        bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
+        
+
+        bouton_supprimer_mois = ttk.Button(
+            fichier_frame, 
+            text="🗑️ Supprimer Mois", 
+            command=self.controller.handle_delete_mois, 
+            style="Red.TButton"
+        )
+        bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
+        
+        """ 
         bouton_enregistrer = ttk.Button(fichier_frame, text="💾 Enregistrer sous...", command=self.controller.handle_save_as, style="Blue.TButton")
         bouton_enregistrer.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_enregistrer, "Enregistrer le budget actuel dans un nouveau fichier.")
-
+        """
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
         ttk.Label(salary_frame, text="Votre Salaire (€) :", style="Title.TLabel").pack(side=tk.LEFT, padx=(0, 10))
