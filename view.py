@@ -70,7 +70,7 @@ class BudgetView:
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
         foreground="#3A3A3A",        # Couleur du texte
-        font=("Segoe UI", 15, "bold"),
+        font=("Segoe UI", 19, "underline bold"),
         padding=5
     )
         
@@ -140,7 +140,7 @@ class BudgetView:
         text="Aucun mois sélectionné",
         style="Month.TLabel"
         )
-        self.label_mois_actuel.pack(side=tk.LEFT, padx=(100, 0))
+        self.label_mois_actuel.pack(side=tk.LEFT, padx=(80, 0))
         
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
@@ -157,8 +157,6 @@ class BudgetView:
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 320))
         ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
-        #ttk.Label(header_frame, text="Effectué", style="Header.TLabel").pack(side=tk.LEFT, padx=(5, 0))
-        #ttk.Label(header_frame, text="Emprunté", style="Header.TLabel").pack(side=tk.LEFT, padx=(0, 10))
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.scrollable_frame = ttk.Frame(canvas)
