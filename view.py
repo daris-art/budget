@@ -68,6 +68,11 @@ class BudgetView:
         style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 10, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
+        style.configure("Month.TLabel",
+        foreground="#3A3A3A",        # Couleur du texte
+        font=("Segoe UI", 15, "bold"),
+        padding=5
+    )
         
         # ### SECTION MODIFIÉE : STYLES DES CHECKBOX ###
         # Style pour la checkbox "Effectué" (Payé)
@@ -129,12 +134,14 @@ class BudgetView:
         )
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
+
+        self.label_mois_actuel = ttk.Label(
+        fichier_frame,
+        text="Aucun mois sélectionné",
+        style="Month.TLabel"
+        )
+        self.label_mois_actuel.pack(side=tk.LEFT, padx=(100, 0))
         
-        """ 
-        bouton_enregistrer = ttk.Button(fichier_frame, text="💾 Enregistrer sous...", command=self.controller.handle_save_as, style="Blue.TButton")
-        bouton_enregistrer.pack(side=tk.LEFT, padx=5)
-        Tooltip(bouton_enregistrer, "Enregistrer le budget actuel dans un nouveau fichier.")
-        """
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
         ttk.Label(salary_frame, text="Votre Salaire (€) :", style="Title.TLabel").pack(side=tk.LEFT, padx=(0, 10))
@@ -288,6 +295,10 @@ class BudgetView:
             categorie_var.trace_add("write", callback)
             effectue_var.trace_add("write", callback)
             emprunte_var.trace_add("write", callback)
+
+    def update_mois_actuel(self, nom_mois):
+        self.label_mois_actuel.config(text=f"{nom_mois}")
+
 
     def set_display_salaire(self, salaire):
         current_val = self.salaire_var.get().replace(',', '.')

@@ -4,7 +4,6 @@ from tkinter import filedialog, simpledialog, messagebox
 import matplotlib.pyplot as plt
 from pathlib import Path
 from view import BudgetView
-from datetime import datetime
 import json
 
 
@@ -17,13 +16,8 @@ class BudgetController:
         self.model = model
         self.view = BudgetView(master, self)
         self.master = master
-        
-        self.autosave_interval = 30000  # Réduit à 30 secondes car SQLite est plus rapide
-        self.autosave_job = None
-        
         self.handle_initial_load()
         self.master.protocol("WM_DELETE_WINDOW", self.handle_on_closing)
-        self.schedule_autosave()
 
     def _refresh_view(self):
         """Met à jour l'affichage de la vue."""
@@ -50,6 +44,7 @@ class BudgetController:
         """Tente de charger le dernier mois utilisé au démarrage."""
         success, message = self.model.load_data_from_last_session()
         self.view.update_status(message)
+        self.update_mois_label()
         self._refresh_view()
         
         # Si aucun mois n'est disponible, proposer d'en créer un
@@ -58,27 +53,9 @@ class BudgetController:
 
     def handle_on_closing(self):
         """Gère la fermeture de l'application."""
-        # Pas besoin de sauvegarde manuelle avec SQLite, les données sont automatiquement persistées
-        if self.autosave_job:
-            self.master.after_cancel(self.autosave_job)
         plt.close('all')
         self.view.master.destroy()
         
-    def schedule_autosave(self):
-        """Programme la sauvegarde automatique (principalement pour le salaire)."""
-        if self.autosave_job:
-            self.master.after_cancel(self.autosave_job)
-        self.autosave_job = self.master.after(self.autosave_interval, self.handle_autosave)
-
-    def handle_autosave(self):
-        """Gère la sauvegarde automatique."""
-        # Avec SQLite, la sauvegarde est automatique, on s'assure juste que le salaire est à jour
-        if self.model.mois_actuel:
-            self.model._save_mois_salaire()
-            now = datetime.now().strftime("%H:%M:%S")
-            self.view.update_status(f"Sauvegarde auto à {now}")
-        self.schedule_autosave()
-
     def handle_create_new_mois(self):
         """Crée un nouveau mois."""
         nom_mois = simpledialog.askstring(
@@ -107,6 +84,15 @@ class BudgetController:
         if success:
             self._refresh_view()
 
+        self.update_mois_label()
+
+    def update_mois_label(self):
+        if self.model.mois_actuel:
+            self.view.update_mois_actuel(self.model.mois_actuel.nom)
+        else:
+            self.view.update_mois_actuel("Aucun mois sélectionné")
+
+
     def handle_load_mois(self):
         """Charge un mois existant."""
         all_mois = self.model.get_all_mois()
@@ -130,6 +116,9 @@ class BudgetController:
             
             if success:
                 self._refresh_view()
+
+        self.update_mois_label()
+
 
     def handle_delete_mois(self):
         """Supprime un mois existant."""
