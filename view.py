@@ -62,21 +62,26 @@ class BudgetView:
         style.configure("Effectue.TLabel", font=("Arial", 12, "bold"))
         style.configure("NonEffectue.TLabel", font=("Arial", 12, "bold"), foreground="#E74C3C")
         style.configure("Emprunte.TLabel", font=("Arial", 10, "bold"), foreground="#007bff")
-        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
+        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 10, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
-        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10, "bold"))
+        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 11, "bold"))
         style.map("Blue.TButton", background=[('active', '#1976D2')])
-        style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 10, "bold"))
+        style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 11, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
         style.configure("Counter.TLabel",
             font=("Helvetica", 16, "bold"),     # 📏 grande taille et gras
             foreground="#2E86C1",              # 🎨 couleur bleu dynamique
         )
+        style.configure("Orange.TButton",
+            foreground="white",     # Couleur du texte
+            background="#856a20",
+            font=("Arial", 10, "bold")
+        )
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
         foreground="#3A3A3A",        # Couleur du texte
-        font=("Segoe UI", 19, "underline bold"),
-        padding=5
+        font=("Segoe UI", 17, "bold"),
+        padding=(15, 5)  # ✅ (horizontal, vertical)
     )
         
         # ### SECTION MODIFIÉE : STYLES DES CHECKBOX ###
@@ -130,6 +135,15 @@ class BudgetView:
         bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
         
+        rename_month_btn = ttk.Button(
+            fichier_frame,
+            text="🧾 Renommer Mois",
+            command=self.controller.on_rename_mois,
+            style="Orange.TButton"
+
+        )
+        rename_month_btn.pack(side=tk.LEFT, padx=(0, 5))
+        Tooltip(rename_month_btn, "Renommer un mois")
 
         bouton_supprimer_mois = ttk.Button(
             fichier_frame, 
@@ -140,21 +154,15 @@ class BudgetView:
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
 
-       
-        rename_month_btn = ttk.Button(
-            fichier_frame,
-            text="Renommer mois",
-            command=self.controller.on_rename_mois
-        )
-        rename_month_btn.pack(side=tk.LEFT, padx=(0, 5))
-        Tooltip(rename_month_btn, "Renommer un mois")
-
         self.label_mois_actuel = ttk.Label(
         fichier_frame,
         text="Aucun mois sélectionné",
-        style="Month.TLabel"
+        style="Month.TLabel",
+        borderwidth=2,              # ✅ Largeur de la bordure
+        relief="groove"              
+        # ✅ Type de bordure : "flat", "raised", "sunken", "ridge", "solid", "groove"
         )
-        self.label_mois_actuel.pack(side=tk.LEFT, padx=(80, 0))
+        self.label_mois_actuel.pack(side=tk.LEFT, padx=(50, 0))
         
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
