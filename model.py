@@ -1,5 +1,4 @@
 # model.py
-
 import sqlite3
 from pathlib import Path
 from dataclasses import dataclass
@@ -129,6 +128,29 @@ class BudgetModel:
             return False, f"Le mois '{nom}' existe déjà."
         except sqlite3.Error as e:
             return False, f"Erreur lors de la création du mois: {e}"
+        
+    def rename_mois(self, mois_id: int, nouveau_nom: str) -> Tuple[bool, str]:
+        """Renomme le mois identifié par `mois_id`."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE mois SET nom = ? WHERE id = ?',
+                    (nouveau_nom, mois_id)
+                )
+                conn.commit()
+
+                # Mettre à jour l'objet mois_actuel si c'est le mois modifié
+                if self.mois_actuel and self.mois_actuel.id == mois_id:
+                    self.mois_actuel.nom = nouveau_nom
+                    self._save_last_mois(nouveau_nom)
+
+                return True, f"Mois renommé en '{nouveau_nom}' avec succès."
+        except sqlite3.IntegrityError:
+            return False, f"Le nom '{nouveau_nom}' est déjà utilisé par un autre mois."
+        except sqlite3.Error as e:
+            return False, f"Erreur lors du renommage du mois: {e}"
+
 
     def load_mois(self, nom: str) -> Tuple[bool, str]:
         """Charge un mois existant."""

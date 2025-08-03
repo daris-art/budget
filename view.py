@@ -4,7 +4,7 @@ from tkinter import filedialog, simpledialog, messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class Tooltip:
     # ... (code identique) ...
@@ -37,7 +37,6 @@ class BudgetView:
         self.controller = controller
         self.depenses_widgets = []
         self.graph_window = None
-
         self.salaire_var = tk.StringVar()
         self.total_depenses_var = tk.StringVar(value="Total Dépenses : 0.00 €")
         self.total_effectue_var = tk.StringVar(value="Total Effectué : 0.00 €")
@@ -45,6 +44,8 @@ class BudgetView:
         self.argent_restant_var = tk.StringVar(value="Argent restant : 0.00 €")
         self.total_emprunte_var = tk.StringVar(value="Total Emprunté : 0.00 €")
         self.status_var = tk.StringVar()
+        self.depenses_count_var = tk.StringVar(value="0 dépense")
+
         
         self.salaire_var.trace_add("write", self.controller.handle_salaire_update)
 
@@ -63,10 +64,14 @@ class BudgetView:
         style.configure("Emprunte.TLabel", font=("Arial", 10, "bold"), foreground="#007bff")
         style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
-        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10))
+        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10, "bold"))
         style.map("Blue.TButton", background=[('active', '#1976D2')])
         style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 10, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
+        style.configure("Counter.TLabel",
+            font=("Helvetica", 16, "bold"),     # 📏 grande taille et gras
+            foreground="#2E86C1",              # 🎨 couleur bleu dynamique
+        )
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
         foreground="#3A3A3A",        # Couleur du texte
@@ -135,6 +140,15 @@ class BudgetView:
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
 
+       
+        rename_month_btn = ttk.Button(
+            fichier_frame,
+            text="Renommer mois",
+            command=self.controller.on_rename_mois
+        )
+        rename_month_btn.pack(side=tk.LEFT, padx=(0, 5))
+        Tooltip(rename_month_btn, "Renommer un mois")
+
         self.label_mois_actuel = ttk.Label(
         fichier_frame,
         text="Aucun mois sélectionné",
@@ -151,13 +165,20 @@ class BudgetView:
 
         expenses_main_frame = ttk.LabelFrame(main_frame, text="Vos Dépenses Mensuelles (€)", style="Title.TLabel", padding="10")
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
+
         header_frame = ttk.Frame(expenses_main_frame)
         header_frame.pack(fill=tk.X, padx=(0, 17), pady=(0, 2)) 
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 320))
+        count_label = ttk.Label(
+            header_frame,
+            textvariable=self.depenses_count_var,
+            style="Counter.TLabel"  # 👈 ici le style spécial
+        )
+        count_label.pack(side=tk.RIGHT)
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 140))
         ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
-        
+
+
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.canvas = canvas
         self.scrollable_frame = ttk.Frame(canvas)
@@ -183,9 +204,20 @@ class BudgetView:
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses.")
 
-        rapport_button = ttk.Button(action_frame, text="📄 Générer Rapport PDF", command=self.controller.handle_generate_pdf_report)
+        rapport_button = ttk.Button(action_frame, text="📄 Générer Rapport PDF", 
+            command=self.controller.handle_generate_pdf_report,
+            style="Blue.TButton")
         rapport_button.pack(side=tk.LEFT, padx=5)
         Tooltip(rapport_button, "Créer un rapport pdf des dépenses.")
+
+        bouton_import_excel = ttk.Button(
+            action_frame,
+            text="📥 Importer Excel",
+            command=self.controller.handle_import_excel,
+            style="Blue.TButton"
+        )
+        bouton_import_excel.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_import_excel, "Importer un relevé bancaire Excel et créer un mois automatiquement.")
 
         ttk.Separator(main_frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
@@ -300,6 +332,11 @@ class BudgetView:
             categorie_var.trace_add("write", callback)
             effectue_var.trace_add("write", callback)
             emprunte_var.trace_add("write", callback)
+
+        nb = len(depenses)
+        pluriel = "dépenses" if nb != 1 else "dépense"
+        self.depenses_count_var.set(f"{nb} {pluriel}")
+
 
     def update_mois_actuel(self, nom_mois):
         self.label_mois_actuel.config(text=f"{nom_mois}")

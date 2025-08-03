@@ -228,7 +228,110 @@ class BudgetController:
         except Exception:
             plt.close()
             return None
+        
+    def handle_import_excel(self):
+        from tkinter import Toplevel, Label, Entry, Button, filedialog, messagebox
+        import pandas as pd
+        from datetime import datetime
 
+        file_path = filedialog.askopenfilename(
+            title="Sélectionner un fichier Excel",
+            filetypes=[("Fichiers Excel", "*.xls *.xlsx")]
+        )
+        if not file_path:
+            return
+
+        # Fenêtre de saisie des dates
+        date_window = Toplevel()
+        date_window.title("Filtrer par période")
+
+        Label(date_window, text="Date de début (JJ/MM/AAAA)").grid(row=0, column=0, padx=10, pady=5)
+        start_entry = Entry(date_window)
+        start_entry.grid(row=0, column=1, padx=10, pady=5)
+
+        Label(date_window, text="Date de fin (JJ/MM/AAAA)").grid(row=1, column=0, padx=10, pady=5)
+        end_entry = Entry(date_window)
+        end_entry.grid(row=1, column=1, padx=10, pady=5)
+
+        def lancer_import():
+            try:
+                start_date = datetime.strptime(start_entry.get(), "%d/%m/%Y")
+                end_date = datetime.strptime(end_entry.get(), "%d/%m/%Y")
+            except ValueError:
+                messagebox.showerror("Erreur", "Format de date invalide. Utilisez JJ/MM/AAAA.")
+                return
+
+            try:
+                df = pd.read_excel(file_path, header=9)
+
+                if "Date" not in df.columns or "Libellé" not in df.columns or "Débit euros" not in df.columns:
+                    messagebox.showerror("Erreur", "Colonnes 'Date', 'Libellé' ou 'Débit euros' manquantes.")
+                    return
+
+                # Convertir la colonne "Date" en datetime
+                df["Date"] = pd.to_datetime(df["Date"], errors="coerce", dayfirst=True)
+
+                # Filtrer les lignes par date
+                df_filtré = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
+
+                depenses = []
+                for _, row in df_filtré.iterrows():
+                    libelle = str(row["Libellé"]).strip()
+                    montant = row["Débit euros"]
+                    if pd.notna(montant) and montant > 0:
+                        depenses.append((libelle, float(montant)))
+
+                if not depenses:
+                    messagebox.showinfo("Aucune dépense", "Aucune dépense trouvée dans cette période.")
+                    return
+
+                nom_mois = f"Importé depuis Excel - {start_date.strftime('%B %Y')} (filtré)"
+                salaire = 0.0
+
+                success, message = self.model.create_mois(nom_mois, salaire)
+                self.view.update_status(message)
+
+                if success:
+                    for nom, montant in depenses:
+                        self.model.add_expense(
+                            nom=nom,
+                            montant=montant,
+                            categorie="Importée",
+                            effectue=True,
+                            emprunte=False
+                        )
+                    self._refresh_view()
+                    self.update_mois_label()
+
+            except Exception as e:
+                messagebox.showerror("Erreur d'import", f"Erreur lors de l'import :\n{str(e)}")
+
+            date_window.destroy()
+
+        Button(date_window, text="Importer", command=lancer_import).grid(row=2, column=0, columnspan=2, pady=10)
+
+    def on_rename_mois(self):
+        if not self.model.mois_actuel:
+            messagebox.showwarning("Aucun mois sélectionné",
+                                   "Sélectionne ou crée d'abord un mois.")
+            return
+
+        # Demander le nouveau nom
+        nouveau_nom = simpledialog.askstring(
+            "Renommer mois",
+            f"Nouveau nom pour « {self.model.mois_actuel.nom} » :",
+            parent=self.view.master
+        )
+        if not nouveau_nom:
+            return  # utilisateur a annulé ou champ vide
+
+        ok, msg = self.model.rename_mois(self.model.mois_actuel.id, nouveau_nom)
+        if ok:
+            self.view.update_mois_actuel(nouveau_nom)
+            """ self.view.refresh_mois_list()      # si ta vue affiche la liste des mois """
+            messagebox.showinfo("Succès", msg)
+        else:
+            messagebox.showerror("Erreur", msg)
     
     # NOUVELLES MÉTHODES pour l'import/export JSON (pour la compatibilité)
     def handle_export_to_json(self):
