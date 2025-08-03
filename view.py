@@ -1,6 +1,6 @@
 # view.py
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import filedialog, simpledialog, messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
@@ -159,6 +159,7 @@ class BudgetView:
         ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
+        self.canvas = canvas
         self.scrollable_frame = ttk.Frame(canvas)
         scrollbar = ttk.Scrollbar(expenses_main_frame, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -181,6 +182,12 @@ class BudgetView:
         bouton_graph = ttk.Button(action_frame, text="📈 Voir Graphique", command=self.controller.handle_show_graph, style="Blue.TButton")
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses.")
+
+        rapport_button = ttk.Button(action_frame, text="📄 Générer Rapport PDF", command=self.controller.handle_generate_pdf_report)
+        rapport_button.pack(side=tk.LEFT, padx=5)
+        Tooltip(rapport_button, "Créer un rapport pdf des dépenses.")
+
+        ttk.Separator(main_frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
         summary_frame = ttk.Frame(main_frame, padding="10 0")
         summary_frame.pack(fill=tk.X, side=tk.BOTTOM)
@@ -303,6 +310,124 @@ class BudgetView:
         if current_val != f"{salaire:.2f}":
             self.salaire_var.set(f"{salaire:.2f}")
     
+    def demander_infos_nouveau_mois(self):
+        nom_mois = simpledialog.askstring(
+            "Nouveau mois", 
+            "Nom du nouveau mois (ex: Janvier 2024):",
+            initialvalue=f"{datetime.now().strftime('%B %Y')}"
+        )
+        
+        if not nom_mois:
+            return None, None
+
+        salaire_str = simpledialog.askstring(
+            "Salaire", 
+            f"Salaire pour {nom_mois}:",
+            initialvalue="0"
+        )
+
+        try:
+            salaire = float(salaire_str.replace(',', '.')) if salaire_str else 0.0
+        except ValueError:
+            salaire = 0.0
+
+        return nom_mois, salaire
+    
+    def demander_mois_a_charger(self, liste_mois):
+        """Affiche une boîte de dialogue pour choisir un mois à charger."""
+        mois_labels = [f"{mois.nom} (Salaire: {mois.salaire}€)" for mois in liste_mois]
+        selected_label = self._show_selection_dialog("Charger un mois", "Sélectionnez un mois :", mois_labels)
+
+        if selected_label:
+            index = mois_labels.index(selected_label)
+            return liste_mois[index]
+        return None
+
+    def _show_selection_dialog(self, title, prompt, options):
+        """Affiche une boîte de dialogue de sélection simple."""
+        # Cette méthode utilise une approche simple avec des boîtes de dialogue
+        # Vous pourriez vouloir créer une interface plus sophistiquée
+        from tkinter import Toplevel, Listbox, Button, Label, SINGLE
+        
+        result = [None]
+        
+        def on_select():
+            selection = listbox.curselection()
+            if selection:
+                result[0] = options[selection[0]]
+            dialog.destroy()
+            
+        def on_cancel():
+            dialog.destroy()
+            
+        dialog = Toplevel(self.master)
+        dialog.title(title)
+        dialog.geometry("400x460")
+        dialog.transient(self.master)
+        dialog.grab_set()
+        
+        Label(dialog, text=prompt, pady=10).pack()
+        
+        listbox = Listbox(dialog, selectmode=SINGLE)
+        for option in options:
+            listbox.insert('end', option)
+        listbox.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        button_frame = Button(dialog)
+        Button(dialog, text="Sélectionner", command=on_select).pack(side='left', padx=5, pady=5)
+        Button(dialog, text="Annuler", command=on_cancel).pack(side='left', padx=5, pady=5)
+        
+        dialog.wait_window()
+        return result[0]
+    
+    def informer_aucun_mois(self):
+        messagebox.showinfo("Information", "Aucun mois disponible.")
+
+    def confirmer_suppression_unique(self):
+        return messagebox.askyesno(
+            "Confirmation",
+            "Vous êtes sur le point de supprimer le seul mois disponible. "
+            "Cela effacera toutes vos données. Continuer ?"
+        )
+
+    def demander_mois_a_supprimer(self, liste_mois):
+        mois_labels = [mois.nom for mois in liste_mois]
+        selected_label = self._show_selection_dialog("Supprimer un mois", "Sélectionnez un mois à supprimer :", mois_labels)
+        if selected_label:
+            index = mois_labels.index(selected_label)
+            return liste_mois[index]
+        return None
+
+    def confirmer_suppression_mois(self, nom_mois):
+        return messagebox.askyesno("Confirmation", f"Supprimer définitivement le mois '{nom_mois}' ?")
+
+    def show_save_file_dialog(self, title, default_filename, callback, file_extensions):
+        """
+        Affiche une boîte de dialogue pour enregistrer un fichier en utilisant
+        le dialogue natif de Tkinter.
+        """
+        file_path = filedialog.asksaveasfilename(
+            title=title,
+            initialfile=default_filename,
+            defaultextension=file_extensions,
+            filetypes=[("PDF Files", file_extensions), ("All files", "*.*")]
+        )
+        # Le callback est appelé avec le chemin du fichier choisi, ou une chaîne vide si annulé.
+        callback(file_path)
+
+    def show_message(self, title, message, message_type="info"):
+        """Affiche un message à l'utilisateur."""
+        import tkinter.messagebox as messagebox
+        
+        if message_type == "info":
+            messagebox.showinfo(title, message)
+        elif message_type == "warning":
+            messagebox.showwarning(title, message)
+        elif message_type == "error":
+            messagebox.showerror(title, message)
+        else:
+            messagebox.showinfo(title, message)
+
     def ask_confirmation(self, title, message):
         return messagebox.askyesno(title, message)
 
@@ -316,6 +441,10 @@ class BudgetView:
             return True
         except ValueError:
             return False
+        
+    def scroll_to_bottom(self):
+        self.master.after(100, lambda: self.canvas.yview_moveto(1.0))
+
 
     def show_graph_window(self, get_data_callback):
         if self.graph_window and self.graph_window.winfo_exists():

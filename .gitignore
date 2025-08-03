@@ -1,4 +1,7 @@
 # Fichiers Python compilés
 __pycache__/
 
+# Env virtuel 
+env/
+
 
