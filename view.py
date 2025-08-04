@@ -77,14 +77,16 @@ class BudgetView:
             background="#856a20",
             font=("Arial", 11, "bold")
         )
+        style.map("Orange.TButton", background=[('active', "#6E5224")])
         style.configure("Orange2.TButton",
             foreground="white",     # Couleur du texte
             background="#627707",
             font=("Arial", 11, "bold")
         )
+        style.map("Orange2.TButton", background=[('active', "#516206")])
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
-        foreground="#3A3A3A",        # Couleur du texte
+        foreground="#233A51",        # Couleur du texte
         font=("Segoe UI", 17, "bold"),
         padding=(15, 5)  # ✅ (horizontal, vertical)
     )
@@ -120,6 +122,20 @@ class BudgetView:
         main_frame = ttk.Frame(self.master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # 🆕 Frame pour le titre du mois sélectionné
+        titre_frame = ttk.Frame(main_frame)
+        titre_frame.pack(fill=tk.X, pady=(0, 5))
+
+        self.label_mois_actuel = ttk.Label(
+            titre_frame,
+            text="Aucun mois sélectionné",
+            style="Month.TLabel",
+            borderwidth=2,
+            relief="ridge",
+            background="#DFEAEA"
+        )
+        self.label_mois_actuel.pack(pady=5)  # ⬅️ Pas de side=LEFT
+
         fichier_frame = ttk.Frame(main_frame)
         fichier_frame.pack(fill=tk.X, pady=(0, 5))
         
@@ -148,7 +164,7 @@ class BudgetView:
 
         )
         rename_month_btn.pack(side=tk.LEFT, padx=5)
-        Tooltip(rename_month_btn, "Renommer un mois")
+        Tooltip(rename_month_btn, "Renommer le mois actuel")
 
         dupliquer_btn = ttk.Button(fichier_frame, text="📋 Dupliquer Mois", 
             command=lambda: self.controller.handle_duplicate_mois(),
@@ -166,16 +182,6 @@ class BudgetView:
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
 
-        self.label_mois_actuel = ttk.Label(
-        fichier_frame,
-        text="Aucun mois sélectionné",
-        style="Month.TLabel",
-        borderwidth=2,              # ✅ Largeur de la bordure
-        relief="groove"              
-        # ✅ Type de bordure : "flat", "raised", "sunken", "ridge", "solid", "groove"
-        )
-        self.label_mois_actuel.pack(side=tk.LEFT, padx=(50, 0))
-        
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
         ttk.Label(salary_frame, text="Votre Salaire (€) :", style="Title.TLabel").pack(side=tk.LEFT, padx=(0, 10))
@@ -233,7 +239,7 @@ class BudgetView:
 
         bouton_import_excel = ttk.Button(
             action_frame,
-            text="📥 Importer Excel",
+            text="⬇️ Importer Excel",
             command=self.controller.handle_import_excel,
             style="Blue.TButton"
         )
