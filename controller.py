@@ -140,6 +140,7 @@ class BudgetController:
             # Nouveau mois déjà chargé comme actif par le modèle ;
             # il suffit de tout redessiner.
             self._refresh_view()
+            self.update_mois_label()
 
     def handle_generate_pdf_report(self):
         """Lance la génération du rapport PDF pour le mois actuel."""
@@ -297,7 +298,18 @@ class BudgetController:
                     messagebox.showinfo("Aucune dépense", "Aucune dépense trouvée dans cette période.")
                     return
 
-                nom_mois = f"Importé depuis Excel - {start_date.strftime('%B %Y')} (filtré)"
+                # Format du nom avec les dates
+                nom_base = f"Importé depuis Excel - {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+                nom_mois = nom_base
+
+                # Vérifier les doublons
+                mois_existants = [mois.nom for mois in self.model.get_all_mois()]
+                suffixe = 1
+                while nom_mois in mois_existants:
+                    nom_mois = f"{nom_base} (copie {suffixe})"
+                    suffixe += 1
+
+                
                 salaire = 0.0
 
                 success, message = self.model.create_mois(nom_mois, salaire)
