@@ -56,15 +56,15 @@ class BudgetView:
         style = ttk.Style()
         style.configure("TLabel", font=("Arial", 10))
         style.configure("Title.TLabel", font=("Arial", 12, "bold"))
-        style.configure("Header.TLabel", font=("Arial", 10, "underline"))
+        style.configure("Header.TLabel", font=("Arial", 11, "underline"))
         style.configure("Result.TLabel", font=("Arial", 14, "bold"))
         style.configure("TotalDepenses.TLabel", font=("Arial", 13, "bold"), foreground="purple")
         style.configure("Effectue.TLabel", font=("Arial", 12, "bold"))
         style.configure("NonEffectue.TLabel", font=("Arial", 12, "bold"), foreground="#E74C3C")
         style.configure("Emprunte.TLabel", font=("Arial", 10, "bold"), foreground="#007bff")
-        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 10, "bold"))
+        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 11, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
-        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 11, "bold"))
+        style.configure("Blue.TButton", foreground="white", background="#0C5C9D", font=("Arial", 11, "bold"))
         style.map("Blue.TButton", background=[('active', '#1976D2')])
         style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 11, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
@@ -75,7 +75,12 @@ class BudgetView:
         style.configure("Orange.TButton",
             foreground="white",     # Couleur du texte
             background="#856a20",
-            font=("Arial", 10, "bold")
+            font=("Arial", 11, "bold")
+        )
+        style.configure("Orange2.TButton",
+            foreground="white",     # Couleur du texte
+            background="#627707",
+            font=("Arial", 11, "bold")
         )
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
@@ -109,7 +114,7 @@ class BudgetView:
 
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("960x930")
+        self.master.geometry("1080x1060")
         self.master.minsize(860, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
@@ -142,12 +147,19 @@ class BudgetView:
             style="Orange.TButton"
 
         )
-        rename_month_btn.pack(side=tk.LEFT, padx=(0, 5))
+        rename_month_btn.pack(side=tk.LEFT, padx=5)
         Tooltip(rename_month_btn, "Renommer un mois")
+
+        dupliquer_btn = ttk.Button(fichier_frame, text="📋 Dupliquer Mois", 
+            command=lambda: self.controller.handle_duplicate_mois(),
+            style="Orange2.TButton"
+        )
+        dupliquer_btn.pack(side=tk.LEFT, padx=5)
+        Tooltip(dupliquer_btn, "Dupliquer le mois actuel")
 
         bouton_supprimer_mois = ttk.Button(
             fichier_frame, 
-            text="🗑️ Supprimer Mois", 
+            text=" ➖ Supprimer Mois", 
             command=self.controller.handle_delete_mois, 
             style="Red.TButton"
         )
@@ -176,16 +188,17 @@ class BudgetView:
 
         header_frame = ttk.Frame(expenses_main_frame)
         header_frame.pack(fill=tk.X, padx=(0, 17), pady=(0, 2)) 
-        ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        ttk.Label(header_frame, text="Nom de la Dépense", 
+                  style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(60, 0))
         count_label = ttk.Label(
             header_frame,
             textvariable=self.depenses_count_var,
             style="Counter.TLabel"  # 👈 ici le style spécial
         )
-        count_label.pack(side=tk.RIGHT)
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 140))
-        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
-
+        count_label.pack(side=tk.RIGHT, padx=(0, 50))
+        ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 140))
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 40))
 
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.canvas = canvas
@@ -289,8 +302,12 @@ class BudgetView:
         self.depenses_widgets = []
 
         for i, depense in enumerate(depenses):
+            # Bordure du bas simulée
+            """ bottom_border = tk.Frame(self.scrollable_frame, height=1, bg="#706666")  # couleur à ajuster
+            bottom_border.pack(fill=tk.X, side=tk.TOP) """
+
             expense_frame = ttk.Frame(self.scrollable_frame)
-            expense_frame.pack(fill=tk.X, pady=2, padx=2)
+            expense_frame.pack(fill=tk.X, pady=1, padx=(0, 1))
 
             nom_var = tk.StringVar(value=depense.nom)
             montant_var = tk.StringVar(value=f"{depense.montant:.2f}")
@@ -304,35 +321,34 @@ class BudgetView:
                 'emprunte_var': emprunte_var
             }
             self.depenses_widgets.append(widgets)
-            
+
+            remove_button = ttk.Button(expense_frame, text="✖️", width=3, style="Red.TButton", 
+                command=lambda i=i: self.controller.handle_remove_expense(i))
+            remove_button.pack(side=tk.LEFT, padx=(0, 15))
+            Tooltip(remove_button, "Supprimer cette dépense.")
+
             nom_entry = ttk.Entry(expense_frame, textvariable=nom_var)
             nom_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
             
-            cat_combo = ttk.Combobox(expense_frame, textvariable=categorie_var, values=categories, width=15, state="readonly")
-            cat_combo.pack(side=tk.LEFT, padx=(10, 0))
-
             validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
             montant_entry = ttk.Entry(expense_frame, textvariable=montant_var, width=10, justify='right', validate="key", validatecommand=validate_cmd)
-            montant_entry.pack(side=tk.LEFT, padx=(5, 0))
+            montant_entry.pack(side=tk.LEFT, padx=(12, 0))
 
-            status_frame = ttk.Frame(expense_frame, padding="5 2", style="StatusFrame.TFrame")
-            status_frame.pack(side=tk.LEFT, padx=(2, 0))
+            cat_combo = ttk.Combobox(expense_frame, textvariable=categorie_var, values=categories, width=15, state="readonly")
+            cat_combo.pack(side=tk.LEFT, padx=(20, 10))
 
-            
+            status_frame = ttk.Frame(expense_frame, padding="5 0", style="StatusFrame.TFrame")
+            status_frame.pack(side=tk.LEFT, padx=(2, 2))
 
             check_effectue = ttk.Checkbutton(status_frame, text=" ✔️ Payée", variable=effectue_var,
                                             onvalue=True, offvalue=False, style="Effectue.TCheckbutton")
-            check_effectue.pack(side=tk.LEFT, padx=(8, 8))
+            check_effectue.pack(side=tk.LEFT, pady=(3, 0), padx=5)
             Tooltip(check_effectue, "Cochez si cette dépense a été payée.")
 
             check_emprunte = ttk.Checkbutton(status_frame, text=" 💸 Empruntée", variable=emprunte_var,
                                             onvalue=True, offvalue=False, style="Emprunte.TCheckbutton")
-            check_emprunte.pack(side=tk.LEFT)
+            check_emprunte.pack(side=tk.LEFT, pady=(3, 0), padx=5)
             Tooltip(check_emprunte, "Cochez si cette dépense est un prêt.")
-
-            remove_button = ttk.Button(expense_frame, text="X", width=3, style="Red.TButton", 
-                                       command=lambda i=i: self.controller.handle_remove_expense(i))
-            remove_button.pack(side=tk.RIGHT, padx=(10, 0))
             
             callback = lambda *args, index=i: self.controller.handle_expense_update(index)
             nom_var.trace_add("write", callback)

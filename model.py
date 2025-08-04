@@ -150,6 +150,57 @@ class BudgetModel:
             return False, f"Le nom '{nouveau_nom}' est déjà utilisé par un autre mois."
         except sqlite3.Error as e:
             return False, f"Erreur lors du renommage du mois: {e}"
+        
+    def dupliquer_mois(self) -> Tuple[bool, str]:
+        """Duplique le mois actuel avec toutes ses dépenses."""
+        if not self.mois_actuel:
+            return False, "Aucun mois à dupliquer."
+
+        try:
+            nom_original = self.mois_actuel.nom
+            salaire_original = self.mois_actuel.salaire
+
+            # Nom suggéré pour le doublon
+            nouveau_nom = nom_original + " (copie)"
+
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                # Créer le nouveau mois
+                cursor.execute(
+                    'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
+                    (nouveau_nom, salaire_original)
+                )
+                nouveau_mois_id = cursor.lastrowid
+
+                # Dupliquer les dépenses associées
+                for depense in self.depenses:
+                    cursor.execute('''
+                        INSERT INTO depenses (mois_id, nom, montant, categorie, effectue, emprunte)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        nouveau_mois_id,
+                        depense.nom,
+                        depense.montant,
+                        depense.categorie,
+                        int(depense.effectue),
+                        int(depense.emprunte)
+                    ))
+
+                conn.commit()
+
+                # Mettre à jour le mois actuel si souhaité
+                self.mois_actuel = Mois(nom=nouveau_nom, salaire=salaire_original, id=nouveau_mois_id)
+                self.salaire = salaire_original
+                self.depenses = self.depenses.copy()
+                self._save_last_mois(nouveau_nom)
+
+                return True, f"Mois '{nouveau_nom}' dupliqué avec succès."
+
+        except sqlite3.IntegrityError:
+            return False, f"Le mois '{nouveau_nom}' existe déjà."
+        except sqlite3.Error as e:
+            return False, f"Erreur lors de la duplication du mois : {e}"
 
 
     def load_mois(self, nom: str) -> Tuple[bool, str]:

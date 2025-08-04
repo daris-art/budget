@@ -128,7 +128,19 @@ class BudgetController:
             self._refresh_view()
             self.update_mois_label()
 
-    # AJOUTER CETTE NOUVELLE MÉTHODE
+    def handle_duplicate_mois(self):
+        """
+        Appelé par le bouton « Dupliquer Mois » de la vue.
+        Déclenche la duplication, puis rafraîchit tout l’écran.
+        """
+        ok, msg = self.model.dupliquer_mois()
+        self.view.update_status(msg)
+
+        if ok:
+            # Nouveau mois déjà chargé comme actif par le modèle ;
+            # il suffit de tout redessiner.
+            self._refresh_view()
+
     def handle_generate_pdf_report(self):
         """Lance la génération du rapport PDF pour le mois actuel."""
         if not self.model.mois_actuel:
