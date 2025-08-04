@@ -515,6 +515,86 @@ class BudgetView:
             return
         self.graph_window = GraphWindow(self.master, get_data_callback)
 
+    # Dans view.py, à l'intérieur de la classe BudgetView
+
+    def ask_string_dialog(self, title, prompt):
+        """Affiche une boîte de dialogue pour demander une chaîne de caractères."""
+        return simpledialog.askstring(title, prompt, parent=self.master)
+
+    def ask_open_file_dialog(self, title, filetypes):
+        """Affiche une boîte de dialogue pour ouvrir un fichier."""
+        return filedialog.askopenfilename(title=title, filetypes=filetypes)
+
+    def ask_save_as_file_dialog(self, title, initial_filename):
+        """Affiche une boîte de dialogue pour enregistrer un fichier."""
+        return filedialog.asksaveasfilename(
+            title=title,
+            initialfile=initial_filename,
+            defaultextension=".json",
+            filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")]
+        )
+
+    def focus_on_last_expense(self):
+        """Met le focus sur le champ 'nom' de la dernière dépense ajoutée."""
+        if self.depenses_widgets:
+            # .winfo_children()[0] correspond au premier widget du frame, soit le nom_entry
+            last_entry = self.depenses_widgets[-1]['frame'].winfo_children()[0]
+            last_entry.focus_set()
+
+    # Dans view.py, à l'intérieur de la classe BudgetView
+
+    def ask_date_range_for_import(self):
+        """
+        Affiche une fenêtre Toplevel pour demander une plage de dates.
+        Retourne (start_date_str, end_date_str) ou (None, None) si l'utilisateur annule.
+        """
+        result = {"start": None, "end": None}
+
+        date_window = tk.Toplevel(self.master)
+        date_window.title("Filtrer par période")
+        date_window.transient(self.master)
+        date_window.grab_set()
+        date_window.resizable(False, False)
+
+        # Centrer la fenêtre sur le parent
+        self.master.update_idletasks()
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (date_window.winfo_width() // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (date_window.winfo_height() // 2)
+        date_window.geometry(f"+{x}+{y}")
+
+        ttk.Label(date_window, text="Date de début (JJ/MM/AAAA):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        start_entry = ttk.Entry(date_window)
+        start_entry.grid(row=0, column=1, padx=10, pady=10)
+        start_entry.focus_set()
+
+        ttk.Label(date_window, text="Date de fin (JJ/MM/AAAA):").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        end_entry = ttk.Entry(date_window)
+        end_entry.grid(row=1, column=1, padx=10, pady=5)
+
+        def on_import():
+            start_str = start_entry.get().strip()
+            end_str = end_entry.get().strip()
+            # Validation simple, la validation complète sera faite dans le modèle
+            if not start_str or not end_str:
+                messagebox.showwarning("Champs requis", "Veuillez entrer une date de début et de fin.", parent=date_window)
+                return
+            
+            result["start"] = start_str
+            result["end"] = end_str
+            date_window.destroy()
+
+        def on_cancel():
+            date_window.destroy()
+
+        button_frame = ttk.Frame(date_window)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=10)
+
+        ttk.Button(button_frame, text="Importer", command=on_import, style="Green.TButton").pack(side="left", padx=10)
+        ttk.Button(button_frame, text="Annuler", command=on_cancel).pack(side="left", padx=10)
+        
+        date_window.wait_window()
+        return result["start"], result["end"]
+
 class GraphWindow(tk.Toplevel):
     # ... (le code de GraphWindow est identique à l'original)
     def __init__(self, master, get_data_callback):
