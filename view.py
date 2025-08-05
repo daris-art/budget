@@ -1,10 +1,10 @@
 # view.py
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import filedialog, simpledialog, messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class Tooltip:
     # ... (code identique) ...
@@ -37,7 +37,6 @@ class BudgetView:
         self.controller = controller
         self.depenses_widgets = []
         self.graph_window = None
-
         self.salaire_var = tk.StringVar()
         self.total_depenses_var = tk.StringVar(value="Total Dépenses : 0.00 €")
         self.total_effectue_var = tk.StringVar(value="Total Effectué : 0.00 €")
@@ -45,6 +44,8 @@ class BudgetView:
         self.argent_restant_var = tk.StringVar(value="Argent restant : 0.00 €")
         self.total_emprunte_var = tk.StringVar(value="Total Emprunté : 0.00 €")
         self.status_var = tk.StringVar()
+        self.depenses_count_var = tk.StringVar(value="0 dépense")
+
         
         self.salaire_var.trace_add("write", self.controller.handle_salaire_update)
 
@@ -55,24 +56,40 @@ class BudgetView:
         style = ttk.Style()
         style.configure("TLabel", font=("Arial", 10))
         style.configure("Title.TLabel", font=("Arial", 12, "bold"))
-        style.configure("Header.TLabel", font=("Arial", 10, "underline"))
+        style.configure("Header.TLabel", font=("Arial", 11, "underline"))
         style.configure("Result.TLabel", font=("Arial", 14, "bold"))
         style.configure("TotalDepenses.TLabel", font=("Arial", 13, "bold"), foreground="purple")
         style.configure("Effectue.TLabel", font=("Arial", 12, "bold"))
         style.configure("NonEffectue.TLabel", font=("Arial", 12, "bold"), foreground="#E74C3C")
         style.configure("Emprunte.TLabel", font=("Arial", 10, "bold"), foreground="#007bff")
-        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 9, "bold"))
+        style.configure("Red.TButton", foreground="white", background="#f44336", font=("Arial", 11, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
-        style.configure("Blue.TButton", foreground="white", background="#2196F3", font=("Arial", 10))
+        style.configure("Blue.TButton", foreground="white", background="#0C5C9D", font=("Arial", 11, "bold"))
         style.map("Blue.TButton", background=[('active', '#1976D2')])
-        style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 10, "bold"))
+        style.configure("Green.TButton", foreground="white", background="#4CAF50", font=("Arial", 11, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
+        style.configure("Counter.TLabel",
+            font=("Helvetica", 16, "bold"),     # 📏 grande taille et gras
+            foreground="#2E86C1",              # 🎨 couleur bleu dynamique
+        )
+        style.configure("Orange.TButton",
+            foreground="white",     # Couleur du texte
+            background="#856a20",
+            font=("Arial", 11, "bold")
+        )
+        style.map("Orange.TButton", background=[('active', "#6E5224")])
+        style.configure("Orange2.TButton",
+            foreground="white",     # Couleur du texte
+            background="#627707",
+            font=("Arial", 11, "bold")
+        )
+        style.map("Orange2.TButton", background=[('active', "#516206")])
         style.configure("Status.TLabel", font=("Arial", 9), foreground="grey")
         style.configure("Month.TLabel",
-        foreground="#3A3A3A",        # Couleur du texte
-        font=("Segoe UI", 19, "underline bold"),
-        padding=5
-    )
+        foreground="#233A51",        # Couleur du texte
+        font=("Segoe UI", 15, "bold"),
+        padding=(15, 5)  # ✅ (horizontal, vertical)
+        )
         
         # ### SECTION MODIFIÉE : STYLES DES CHECKBOX ###
         # Style pour la checkbox "Effectué" (Payé)
@@ -99,11 +116,25 @@ class BudgetView:
 
     def _create_widgets(self):
         self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-        self.master.geometry("960x930")
+        self.master.geometry("1080x1020")
         self.master.minsize(860, 600)
         
         main_frame = ttk.Frame(self.master, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 🆕 Frame pour le titre du mois sélectionné
+        titre_frame = ttk.Frame(main_frame)
+        titre_frame.pack(fill=tk.X, pady=(0, 5))
+
+        self.label_mois_actuel = ttk.Label(
+            titre_frame,
+            text="Aucun mois sélectionné",
+            style="Month.TLabel",
+            borderwidth=2,
+            relief="ridge",
+            background="#DFEAEA"
+        )
+        self.label_mois_actuel.pack(pady=5)  # ⬅️ Pas de side=LEFT
 
         fichier_frame = ttk.Frame(main_frame)
         fichier_frame.pack(fill=tk.X, pady=(0, 5))
@@ -125,6 +156,22 @@ class BudgetView:
         bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
         
+        rename_month_btn = ttk.Button(
+            fichier_frame,
+            text="🧾 Renommer Mois",
+            command=self.controller.on_rename_mois,
+            style="Orange.TButton"
+
+        )
+        rename_month_btn.pack(side=tk.LEFT, padx=(0, 5))
+        Tooltip(rename_month_btn, "Renommer un mois")
+
+        dupliquer_btn = ttk.Button(fichier_frame, text="📋 Dupliquer Mois", 
+            command=lambda: self.controller.handle_duplicate_mois(),
+            style="Orange2.TButton"
+        )
+        dupliquer_btn.pack(side=tk.LEFT, padx=5)
+        Tooltip(dupliquer_btn, "Dupliquer le mois actuel")
 
         bouton_supprimer_mois = ttk.Button(
             fichier_frame, 
@@ -134,13 +181,6 @@ class BudgetView:
         )
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
-
-        self.label_mois_actuel = ttk.Label(
-        fichier_frame,
-        text="Aucun mois sélectionné",
-        style="Month.TLabel"
-        )
-        self.label_mois_actuel.pack(side=tk.LEFT, padx=(80, 0))
         
         salary_frame = ttk.Frame(main_frame)
         salary_frame.pack(fill=tk.X, pady=5)
@@ -151,14 +191,22 @@ class BudgetView:
 
         expenses_main_frame = ttk.LabelFrame(main_frame, text="Vos Dépenses Mensuelles (€)", style="Title.TLabel", padding="10")
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
+
         header_frame = ttk.Frame(expenses_main_frame)
         header_frame.pack(fill=tk.X, padx=(0, 17), pady=(0, 2)) 
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 320))
+        count_label = ttk.Label(
+            header_frame,
+            textvariable=self.depenses_count_var,
+            style="Counter.TLabel"  # 👈 ici le style spécial
+        )
+        count_label.pack(side=tk.RIGHT)
+        ttk.Label(header_frame, text="Montant (€)", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 140))
         ttk.Label(header_frame, text="Catégorie", style="Header.TLabel").pack(side=tk.RIGHT, padx=(0, 80))
-        
+
+
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
+        self.canvas = canvas
         self.scrollable_frame = ttk.Frame(canvas)
         scrollbar = ttk.Scrollbar(expenses_main_frame, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -181,6 +229,23 @@ class BudgetView:
         bouton_graph = ttk.Button(action_frame, text="📈 Voir Graphique", command=self.controller.handle_show_graph, style="Blue.TButton")
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses.")
+
+        rapport_button = ttk.Button(action_frame, text="📄 Générer Rapport PDF", 
+            command=self.controller.handle_generate_pdf_report,
+            style="Blue.TButton")
+        rapport_button.pack(side=tk.LEFT, padx=5)
+        Tooltip(rapport_button, "Créer un rapport pdf des dépenses.")
+
+        bouton_import_excel = ttk.Button(
+            action_frame,
+            text="📥 Importer Excel",
+            command=self.controller.handle_import_excel,
+            style="Blue.TButton"
+        )
+        bouton_import_excel.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_import_excel, "Importer un relevé bancaire Excel et créer un mois automatiquement.")
+
+        ttk.Separator(main_frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
         summary_frame = ttk.Frame(main_frame, padding="10 0")
         summary_frame.pack(fill=tk.X, side=tk.BOTTOM)
@@ -294,6 +359,11 @@ class BudgetView:
             effectue_var.trace_add("write", callback)
             emprunte_var.trace_add("write", callback)
 
+        nb = len(depenses)
+        pluriel = "dépenses" if nb != 1 else "dépense"
+        self.depenses_count_var.set(f"{nb} {pluriel}")
+
+
     def update_mois_actuel(self, nom_mois):
         self.label_mois_actuel.config(text=f"{nom_mois}")
 
@@ -303,6 +373,124 @@ class BudgetView:
         if current_val != f"{salaire:.2f}":
             self.salaire_var.set(f"{salaire:.2f}")
     
+    def demander_infos_nouveau_mois(self):
+        nom_mois = simpledialog.askstring(
+            "Nouveau mois", 
+            "Nom du nouveau mois (ex: Janvier 2024):",
+            initialvalue=f"{datetime.now().strftime('%B %Y')}"
+        )
+        
+        if not nom_mois:
+            return None, None
+
+        salaire_str = simpledialog.askstring(
+            "Salaire", 
+            f"Salaire pour {nom_mois}:",
+            initialvalue="0"
+        )
+
+        try:
+            salaire = float(salaire_str.replace(',', '.')) if salaire_str else 0.0
+        except ValueError:
+            salaire = 0.0
+
+        return nom_mois, salaire
+    
+    def demander_mois_a_charger(self, liste_mois):
+        """Affiche une boîte de dialogue pour choisir un mois à charger."""
+        mois_labels = [f"{mois.nom} (Salaire: {mois.salaire}€)" for mois in liste_mois]
+        selected_label = self._show_selection_dialog("Charger un mois", "Sélectionnez un mois :", mois_labels)
+
+        if selected_label:
+            index = mois_labels.index(selected_label)
+            return liste_mois[index]
+        return None
+
+    def _show_selection_dialog(self, title, prompt, options):
+        """Affiche une boîte de dialogue de sélection simple."""
+        # Cette méthode utilise une approche simple avec des boîtes de dialogue
+        # Vous pourriez vouloir créer une interface plus sophistiquée
+        from tkinter import Toplevel, Listbox, Button, Label, SINGLE
+        
+        result = [None]
+        
+        def on_select():
+            selection = listbox.curselection()
+            if selection:
+                result[0] = options[selection[0]]
+            dialog.destroy()
+            
+        def on_cancel():
+            dialog.destroy()
+            
+        dialog = Toplevel(self.master)
+        dialog.title(title)
+        dialog.geometry("400x460")
+        dialog.transient(self.master)
+        dialog.grab_set()
+        
+        Label(dialog, text=prompt, pady=10).pack()
+        
+        listbox = Listbox(dialog, selectmode=SINGLE)
+        for option in options:
+            listbox.insert('end', option)
+        listbox.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        button_frame = Button(dialog)
+        Button(dialog, text="Sélectionner", command=on_select).pack(side='left', padx=5, pady=5)
+        Button(dialog, text="Annuler", command=on_cancel).pack(side='left', padx=5, pady=5)
+        
+        dialog.wait_window()
+        return result[0]
+    
+    def informer_aucun_mois(self):
+        messagebox.showinfo("Information", "Aucun mois disponible.")
+
+    def confirmer_suppression_unique(self):
+        return messagebox.askyesno(
+            "Confirmation",
+            "Vous êtes sur le point de supprimer le seul mois disponible. "
+            "Cela effacera toutes vos données. Continuer ?"
+        )
+
+    def demander_mois_a_supprimer(self, liste_mois):
+        mois_labels = [mois.nom for mois in liste_mois]
+        selected_label = self._show_selection_dialog("Supprimer un mois", "Sélectionnez un mois à supprimer :", mois_labels)
+        if selected_label:
+            index = mois_labels.index(selected_label)
+            return liste_mois[index]
+        return None
+
+    def confirmer_suppression_mois(self, nom_mois):
+        return messagebox.askyesno("Confirmation", f"Supprimer définitivement le mois '{nom_mois}' ?")
+
+    def show_save_file_dialog(self, title, default_filename, callback, file_extensions):
+        """
+        Affiche une boîte de dialogue pour enregistrer un fichier en utilisant
+        le dialogue natif de Tkinter.
+        """
+        file_path = filedialog.asksaveasfilename(
+            title=title,
+            initialfile=default_filename,
+            defaultextension=file_extensions,
+            filetypes=[("PDF Files", file_extensions), ("All files", "*.*")]
+        )
+        # Le callback est appelé avec le chemin du fichier choisi, ou une chaîne vide si annulé.
+        callback(file_path)
+
+    def show_message(self, title, message, message_type="info"):
+        """Affiche un message à l'utilisateur."""
+        import tkinter.messagebox as messagebox
+        
+        if message_type == "info":
+            messagebox.showinfo(title, message)
+        elif message_type == "warning":
+            messagebox.showwarning(title, message)
+        elif message_type == "error":
+            messagebox.showerror(title, message)
+        else:
+            messagebox.showinfo(title, message)
+
     def ask_confirmation(self, title, message):
         return messagebox.askyesno(title, message)
 
@@ -316,6 +504,10 @@ class BudgetView:
             return True
         except ValueError:
             return False
+        
+    def scroll_to_bottom(self):
+        self.master.after(100, lambda: self.canvas.yview_moveto(1.0))
+
 
     def show_graph_window(self, get_data_callback):
         if self.graph_window and self.graph_window.winfo_exists():
