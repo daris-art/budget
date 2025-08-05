@@ -4,4 +4,4 @@ __pycache__/
 # Env virtuel 
 env/
 
-
+*.log
