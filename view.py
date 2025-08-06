@@ -134,6 +134,14 @@ class BudgetView:
         bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
 
+        bouton_importer_excel = ttk.Button(
+            buttons_frame, text="📥 Importer Excel",
+            command=self.controller.handle_import_from_excel, style="Green.TButton"
+        )
+        bouton_importer_excel.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_importer_excel, "Créer un nouveau mois à partir d'un relevé de compte Excel")
+
+
         bouton_renommer = ttk.Button(
             buttons_frame, text="✏️ Renommer Mois",
             command=self.controller.handle_rename_mois, style="Gray.TButton"
@@ -657,3 +665,15 @@ class BudgetView:
             return True
         except ValueError:
             return False
+        
+    def get_excel_import_filepath(self) -> Optional[Path]:
+        """Récupère le chemin d'import pour un fichier Excel"""
+        try:
+            filepath = filedialog.askopenfilename(
+                title="Importer depuis Excel",
+                filetypes=[("Fichiers Excel", "*.xlsx"), ("Tous les fichiers", "*.*")]
+            )
+            return Path(filepath) if filepath else None
+        except Exception as e:
+            logger.error(f"Erreur lors de la sélection du fichier d'import Excel: {e}")
+            return None

@@ -497,3 +497,26 @@ class BudgetModel(Observable):
             'total_depenses': self.get_total_depenses(),
             'argent_restant': self.get_argent_restant()
         }
+
+    def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
+        """
+        Gère l'importation d'un fichier Excel pour créer un nouveau mois de dépenses.
+        """
+        try:
+            # Valider le nom du nouveau mois
+            if not new_mois_name or not new_mois_name.strip():
+                return Result.error("Le nom du nouveau mois ne peut pas être vide.")
+
+            # Déléguer l'ensemble du processus au service d'import/export
+            result = self._import_export_service.import_from_excel(filepath, new_mois_name.strip())
+            
+            if result.is_success:
+                # Si l'import réussit, on charge ce nouveau mois pour l'afficher
+                self.load_mois(new_mois_name.strip())
+                # La méthode load_mois s'occupe déjà de notifier les observateurs
+            
+            return result
+
+        except Exception as e:
+            logger.critical(f"Erreur inattendue lors de l'import Excel: {e}")
+            return Result.error("Une erreur inattendue s'est produite lors de l'import.")

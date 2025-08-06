@@ -352,6 +352,37 @@ class BudgetController(Observer):
         except Exception as e:
             logger.error(f"Erreur lors de l'import: {e}")
             self.view.show_error_message("Erreur lors de l'import")
+
+    def handle_import_from_excel(self):
+        """Gère l'import depuis un fichier Excel."""
+        try:
+            # 1. Demander à l'utilisateur de choisir le fichier .xlsx
+            filepath = self.view.get_excel_import_filepath()
+            if not filepath:
+                return
+
+            # 2. Demander à l'utilisateur le nom du nouveau mois à créer
+            default_name = f"Import {filepath.stem} {datetime.now().strftime('%B %Y')}"
+            new_name = self.view.ask_for_string("Nouveau mois",
+                                                "Entrez le nom pour ce nouveau mois importé :",
+                                                default_name)
+            if not new_name:
+                return
+
+            # 3. Lancer le processus dans le modèle
+            self.view.clear_for_loading(f"Importation depuis '{filepath.name}'...")
+            
+            def do_import():
+                result = self.model.import_from_excel(filepath, new_name)
+                self._handle_result(result)
+            
+            # Utiliser after() pour laisser l'UI se rafraîchir
+            self.master.after(50, do_import)
+
+        except Exception as e:
+            logger.error(f"Erreur lors de l'import Excel: {e}")
+            self.view.show_error_message("Une erreur inattendue est survenue durant l'import Excel.")
+
     
     # ===== GRAPHIQUES =====
     def handle_show_graph(self):

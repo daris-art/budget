@@ -7,6 +7,8 @@ from dataclasses import dataclass, asdict
 from typing import List, Optional, Tuple, Any, Dict
 from datetime import datetime
 import logging
+import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -450,6 +452,68 @@ class ImportExportService:
         except Exception as e:
             logger.error(f"Erreur inattendue lors de l'import: {e}")
             return Result.error("Erreur inattendue lors de l'import")
+        
+    def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
+        """
+        Lit un fichier Excel, crée un nouveau mois et y importe les dépenses.
+        """
+        try:
+            # 1. Analyser le fichier Excel pour extraire les dépenses
+            workbook = openpyxl.load_workbook(filepath, read_only=True)
+            sheet: Worksheet = workbook.active
+            
+            header_row_index = -1
+            col_indices = {}
+
+            # Recherche de la ligne d'en-tête à partir de la ligne 10
+            for i in range(10, sheet.max_row + 1):
+                row_values = [str(cell.value).strip() if cell.value else "" for cell in sheet[i]]
+                if "Libellé" in row_values and "Débit euros" in row_values:
+                    header_row_index = i
+                    libelle_index = row_values.index("Libellé")
+                    debit_index = row_values.index("Débit euros")
+                    col_indices = {"nom": libelle_index, "montant": debit_index}
+                    break
+            
+            if header_row_index == -1:
+                return Result.error("En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et 'Débit euros' existent à partir de la ligne 10.")
+
+            depenses_a_importer: List[Depense] = []
+            # 2. Lire les lignes de dépenses
+            for i in range(header_row_index + 1, sheet.max_row + 1):
+                nom = sheet.cell(row=i, column=col_indices["nom"] + 1).value
+                montant_brut = sheet.cell(row=i, column=col_indices["montant"] + 1).value
+
+                if nom and montant_brut:
+                    try:
+                        montant = float(montant_brut)
+                        if montant > 0:
+                            depenses_a_importer.append(
+                                Depense(nom=str(nom).strip(), montant=montant)
+                            )
+                    except (ValueError, TypeError):
+                        # Ignorer les lignes où le montant n'est pas un nombre valide
+                        logger.warning(f"Ligne {i} ignorée: montant invalide ('{montant_brut}')")
+                        continue
+            
+            # 3. Créer le nouveau mois dans la base de données
+            try:
+                # Salaire par défaut à 0 pour le mois importé
+                new_mois_id = self.db_manager.create_mois(new_mois_name, 0.0)
+            except DatabaseError as e:
+                return Result.error(str(e)) # Ex: Le mois existe déjà
+
+            # 4. Insérer toutes les dépenses lues
+            for depense in depenses_a_importer:
+                self.db_manager.create_depense(new_mois_id, depense)
+
+            return Result.success(f"{len(depenses_a_importer)} dépenses importées dans le nouveau mois '{new_mois_name}'.")
+
+        except FileNotFoundError:
+            return Result.error("Fichier Excel non trouvé.")
+        except Exception as e:
+            logger.error(f"Erreur inattendue lors de l'import Excel: {e}")
+            return Result.error(f"Une erreur inattendue est survenue: {e}")
 
 # ===== PATTERN OBSERVER =====
 class Observable:
