@@ -1,14 +1,14 @@
 # controller.py - Controller amélioré avec architecture MVC stricte
 
-from tkinter import filedialog, simpledialog, messagebox
 import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import datetime
 import logging
-
+import pandas as pd
 from utils import Observer, Result, MoisInput
 from model import BudgetModel
 from view import BudgetView
+from utils import Depense
 
 logger = logging.getLogger(__name__)
 
@@ -390,3 +390,110 @@ class BudgetController(Observer):
             self.view.update_summary_display(display_data)
         except Exception as e:
             logger.error(f"Erreur lors du rafraîchissement du résumé: {e}")
+
+    def handle_import_from_excel(self):
+        """
+        Gère l'importation optimisée de dépenses depuis un fichier Excel (.xlsx).
+        Étape 1: Charge et valide toutes les données dans une liste.
+        Étape 2: Envoie la liste complète au modèle pour un ajout en masse.
+        Étape 3: Met à jour l'affichage une seule fois.
+        """
+        if pd is None:
+            self.view.show_error_message(
+                "La fonctionnalité d'import Excel nécessite des bibliothèques supplémentaires.\n\n"
+                "Veuillez les installer en exécutant : pip install pandas openpyxl"
+            )
+            return
+
+        if not self.model.is_mois_loaded():
+            self.view.show_warning_message("Veuillez charger ou créer un mois avant d'importer.")
+            return
+
+        filepath = self.view.get_excel_import_filepath()
+        if not filepath:
+            return
+
+        try:
+            # --- PHASE 1 : Préparation des données ---
+            df = pd.read_excel(filepath, header=9)
+            required_columns = {'Libellé', 'Débit euros'}
+            if not required_columns.issubset(df.columns):
+                self.view.show_error_message(f"Fichier invalide. Les colonnes requises sont : {', '.join(required_columns)}.")
+                return
+
+            depenses_a_importer = []
+            skipped_rows = 0
+            for index, row in df.iterrows():
+                try:
+                    nom = str(row['Libellé']).strip()
+                    montant_str = str(row['Débit euros']).replace(',', '.')
+                    montant_float = float(montant_str)
+
+                    if not nom or pd.isna(montant_float) or montant_float <= 0:
+                        skipped_rows += 1
+                        continue
+                    
+                    # On crée l'objet Depense mais on ne le sauvegarde pas encore
+                    depense = Depense(
+                        nom=nom,
+                        montant=montant_float,
+                        categorie="Importé",
+                        effectue=False,
+                        emprunte=False
+                    )
+                    depenses_a_importer.append(depense)
+
+                except (ValueError, TypeError):
+                    skipped_rows += 1
+                    continue
+            
+            if not depenses_a_importer:
+                self.view.show_warning_message("Aucune dépense valide (débit positif) n'a été trouvée dans le fichier.")
+                return
+
+            # --- PHASE 2 : Sauvegarde en masse via le modèle ---
+               # On parcourt le tableau et on enregistre chaque dépense individuellement.
+            for depense in depenses_a_importer:
+                # Appel de la méthode du modèle pour chaque dépense
+                result = self.model.add_expense(
+                    nom=depense.nom,
+                    montant_str=str(depense.montant), # Conversion du float en string
+                    categorie=depense.categorie,
+                    effectue=depense.effectue,
+                    emprunte=depense.emprunte
+                )
+                
+                # Si l'ajout d'une seule dépense échoue, on arrête tout le processus.
+                if not result.is_success:
+                    self.view.show_error_message(
+                        f"L'importation a été interrompue en raison d'une erreur :\n{result.message}"
+                    )
+                    # On rafraîchit l'affichage pour voir ce qui a été importé jusqu'à présent
+                    self._update_full_view()
+                    return
+                    
+            # --- PHASE 3 : Mise à jour de l'affichage ---
+            self._update_full_view()
+            self.view.scroll_to_bottom()
+
+            success_message = f"{len(depenses_a_importer)} dépense(s) ont été importée(s) avec succès."
+            if skipped_rows > 0:
+                success_message += f"\n{skipped_rows} ligne(s) ont été ignorées (crédits ou données invalides)."
+            
+            self.view.show_info_message(success_message)
+            self.view.update_status(f"Importation depuis {filepath.name} terminée.")
+
+        except Exception as e:
+            self.view.show_error_message(f"Une erreur est survenue lors de la lecture du fichier Excel.\n\n{e}")
+
+    
+
+    # Assurez-vous que votre contrôleur a une méthode pour rafraîchir la vue, comme celle-ci :
+    def _update_full_view(self):
+        """Met à jour l'ensemble de la vue avec les données actuelles du modèle."""
+        display_data = self.model.get_display_data()
+        categories = self.model.get_categories()
+        self.view.update_complete_display(display_data, categories)
+        self.view.update_status("Prêt.")
+
+

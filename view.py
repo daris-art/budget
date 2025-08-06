@@ -244,7 +244,6 @@ class BudgetView:
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses")
         
-        # --- Boutons déplacés ici ---
         bouton_export = ttk.Button(
             action_frame, text="📤 Exporter JSON", 
             command=self.controller.handle_export_to_json, style="Blue.TButton"
@@ -257,7 +256,16 @@ class BudgetView:
             command=self.controller.handle_import_from_json, style="Blue.TButton"
         )
         bouton_import.pack(side=tk.LEFT, padx=5)
-        Tooltip(bouton_import, "Importer des données depuis un fichier JSON")
+        Tooltip(bouton_import, "Importer des dépenses depuis un fichier JSON")
+
+        # --- NOUVEAU BOUTON ---
+        bouton_import_excel = ttk.Button(
+            action_frame, text="📥 Importer Excel",
+            command=self.controller.handle_import_from_excel, style="Green.TButton"
+        )
+        bouton_import_excel.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_import_excel, "Importer des dépenses depuis un fichier Excel (.xlsx)")
+
 
     def _create_summary_section(self, parent):
         """Crée la section de résumé financier"""
@@ -515,6 +523,20 @@ class BudgetView:
         except Exception as e:
             logger.error(f"Erreur lors de la sélection du fichier d'import: {e}")
             return None
+
+    # --- NOUVELLE MÉTHODE ---
+    def get_excel_import_filepath(self) -> Optional[Path]:
+        """Récupère le chemin d'import pour un fichier Excel."""
+        try:
+            filepath = filedialog.askopenfilename(
+                title="Importer depuis Excel",
+                filetypes=[("Fichiers Excel", "*.xlsx"), ("Tous les fichiers", "*.*")]
+            )
+            return Path(filepath) if filepath else None
+        except Exception as e:
+            logger.error(f"Erreur lors de la sélection du fichier d'import Excel: {e}")
+            return None
+
 
     def get_salaire_value(self) -> str:
         return self.salaire_var.get()

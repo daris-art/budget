@@ -20,15 +20,12 @@ class BudgetModel(Observable):
     def __init__(self):
         super().__init__()
         
-        # Configuration
-        self.categories = [
-            "Alimentation", "Logement", "Transport", "Loisirs",
-            "Santé", "Factures", "Shopping", "Épargne", "Autres"
-        ]
-        
         # État actuel
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
+        
+        # Configuration
+        self.categories = self.get_categories()
         
         # Services initialisés à None
         self._db_manager: Optional[DatabaseManager] = None
@@ -102,6 +99,15 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.critical(f"Erreur inattendue lors création mois: {e}")
             return Result.error("Une erreur inattendue s'est produite")
+        
+    def is_mois_loaded(self) -> bool:
+        """
+        Vérifie si un mois est actuellement chargé dans le modèle.
+        
+        Returns:
+            True si un mois est chargé, False sinon.
+        """
+        return self.mois_actuel is not None
     
     def load_mois(self, nom: str) -> Result:
         """Charge un mois existant"""
@@ -379,6 +385,31 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.critical(f"Erreur inattendue lors suppression toutes dépenses: {e}")
             return Result.error("Une erreur inattendue s'est produite")
+        
+    def get_categories(self) -> list[str]:
+        """
+        Retourne une liste triée et unique de toutes les catégories de dépenses.
+
+        Combine un ensemble de catégories par défaut avec celles déjà présentes
+        dans les dépenses du mois actuel pour peupler les menus déroulants.
+        """
+        # Catégories de base toujours disponibles
+        categories_par_defaut = {
+            "Logement", "Transport", "Nourriture", "Loisirs", 
+            "Santé", "Factures", "Importé", "Autres", "Divers"
+        }
+
+        # Si aucun mois n'est chargé, on retourne juste la liste par défaut
+        if not self.is_mois_loaded():
+            return sorted(list(categories_par_defaut))
+
+        # Récupérer les catégories des dépenses existantes
+        categories_actuelles = {depense.categorie for depense in self._depenses}
+
+        # Fusionner les deux ensembles pour obtenir une liste unique et la trier
+        toutes_les_categories = sorted(list(categories_par_defaut.union(categories_actuelles)))
+
+        return toutes_les_categories
     
     # ===== CALCULS FINANCIERS =====
     def get_total_depenses(self) -> float:
