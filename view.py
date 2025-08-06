@@ -1,7 +1,7 @@
 # view.py - Vue améliorée avec architecture MVC stricte
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
@@ -35,7 +35,7 @@ class Tooltip:
             label.pack()
             self.tooltip.wm_geometry("+%d+%d" % (x, y))
         except tk.TclError:
-            pass  # Widget peut être détruit
+            pass
 
     def hide(self, event):
         if self.tooltip:
@@ -56,7 +56,6 @@ class BudgetView:
         self.depenses_widgets = []
         self.graph_window = None
 
-        # Variables d'interface
         self.salaire_var = tk.StringVar()
         self.total_depenses_var = tk.StringVar(value="Total Dépenses : 0.00 €")
         self.total_effectue_var = tk.StringVar(value="Total Effectué : 0.00 €")
@@ -66,10 +65,8 @@ class BudgetView:
         self.status_var = tk.StringVar()
         self.mois_actuel_var = tk.StringVar(value="Aucun mois sélectionné")
         
-        # Configuration des callbacks
         self.salaire_var.trace_add("write", self.controller.handle_salaire_update)
 
-        # Création de l'interface
         self._configure_styles()
         self._create_widgets()
         
@@ -79,7 +76,6 @@ class BudgetView:
         """Configure les styles visuels"""
         style = ttk.Style()
         
-        # Styles de base
         style.configure("TLabel", font=("Arial", 10))
         style.configure("Title.TLabel", font=("Arial", 12, "bold"))
         style.configure("Header.TLabel", font=("Arial", 10, "underline"))
@@ -92,7 +88,6 @@ class BudgetView:
         style.configure("Month.TLabel", foreground="#3A3A3A", 
                        font=("Segoe UI", 19, "underline bold"), padding=5)
         
-        # Styles des boutons
         style.configure("Red.TButton", foreground="white", background="#f44336", 
                        font=("Arial", 9, "bold"))
         style.map("Red.TButton", background=[('active', '#d32f2f')])
@@ -103,7 +98,10 @@ class BudgetView:
                        font=("Arial", 10, "bold"))
         style.map("Green.TButton", background=[('active', '#45a049')])
         
-        # Styles des checkboxes
+        style.configure("Orange.TButton", foreground="white", background="#ff9800",
+                       font=("Arial", 10))
+        style.map("Orange.TButton", background=[('active', '#f57c00')])
+        
         style.configure("Effectue.TCheckbutton", font=("Arial", 11))
         style.map("Effectue.TCheckbutton",
                   indicatorcolor=[('selected', '#28a745'), ('!selected', 'white')],
@@ -114,7 +112,6 @@ class BudgetView:
                   indicatorcolor=[('selected', '#007bff'), ('!selected', 'white')],
                   background=[('active', '#e9ecef')])
         
-        # Autres styles
         style.configure("StatusFrame.TFrame", borderwidth=1)
         style.map('TCombobox', fieldbackground=[('readonly', 'white')])
         style.map('TCombobox', selectbackground=[('readonly', 'blue')])
@@ -124,28 +121,17 @@ class BudgetView:
         """Crée tous les widgets de l'interface"""
         try:
             self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-            self.master.geometry("960x930")
-            self.master.minsize(860, 600)
+            self.master.geometry("1024x930")
+            self.master.minsize(960, 600)
             
             main_frame = ttk.Frame(self.master, padding="10")
             main_frame.pack(fill=tk.BOTH, expand=True)
 
-            # Section gestion des fichiers/mois
             self._create_file_management_section(main_frame)
-            
-            # Section salaire
             self._create_salary_section(main_frame)
-            
-            # Section dépenses
             self._create_expenses_section(main_frame)
-            
-            # Section actions
             self._create_actions_section(main_frame)
-            
-            # Section résumé
             self._create_summary_section(main_frame)
-            
-            # Barre de statut
             self._create_status_bar()
             
             logger.info("Interface créée avec succès")
@@ -156,51 +142,61 @@ class BudgetView:
 
     def _create_file_management_section(self, parent):
         """Crée la section de gestion des fichiers/mois"""
-        fichier_frame = ttk.Frame(parent)
-        fichier_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        # Boutons de gestion des mois
+        top_frame = ttk.Frame(parent)
+        top_frame.pack(fill=tk.X, pady=(5, 15))
+
+        buttons_frame = ttk.Frame(top_frame)
+        buttons_frame.pack()
+
         bouton_charger_mois = ttk.Button(
-            fichier_frame, text="📂 Charger Mois", 
+            buttons_frame, text="📂 Charger Mois", 
             command=self.controller.handle_load_mois, style="Blue.TButton"
         )
         bouton_charger_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_charger_mois, "Charger un budget mensuel existant")
 
         bouton_nouveau_mois = ttk.Button(
-            fichier_frame, text="➕ Nouveau Mois", 
+            buttons_frame, text="➕ Nouveau Mois", 
             command=self.controller.handle_create_new_mois, style="Green.TButton"
         )
         bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
+        
+        bouton_dupliquer = ttk.Button(
+            buttons_frame, text="📋 Dupliquer Mois",
+            command=self.controller.handle_duplicate_mois, style="Orange.TButton"
+        )
+        bouton_dupliquer.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_dupliquer, "Crée une copie du mois actuel avec toutes ses dépenses")
 
         bouton_supprimer_mois = ttk.Button(
-            fichier_frame, text="🗑️ Supprimer Mois", 
+            buttons_frame, text="🗑️ Supprimer Mois", 
             command=self.controller.handle_delete_mois, style="Red.TButton"
         )
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
 
-        # Boutons d'import/export
         bouton_export = ttk.Button(
-            fichier_frame, text="📤 Exporter JSON", 
+            buttons_frame, text="📤 Exporter JSON", 
             command=self.controller.handle_export_to_json, style="Blue.TButton"
         )
         bouton_export.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_export, "Exporter le mois actuel vers un fichier JSON")
 
         bouton_import = ttk.Button(
-            fichier_frame, text="📥 Importer JSON", 
+            buttons_frame, text="📥 Importer JSON", 
             command=self.controller.handle_import_from_json, style="Blue.TButton"
         )
         bouton_import.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_import, "Importer des données depuis un fichier JSON")
 
-        # Label du mois actuel
         self.label_mois_actuel = ttk.Label(
-            fichier_frame, textvariable=self.mois_actuel_var, style="Month.TLabel"
+            top_frame, 
+            textvariable=self.mois_actuel_var, 
+            style="Month.TLabel",
+            justify=tk.CENTER
         )
-        self.label_mois_actuel.pack(side=tk.LEFT, padx=(80, 0))
+        self.label_mois_actuel.pack(pady=(10, 0))
 
     def _create_salary_section(self, parent):
         """Crée la section de saisie du salaire"""
@@ -226,9 +222,8 @@ class BudgetView:
         )
         expenses_main_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        # En-têtes
         header_frame = ttk.Frame(expenses_main_frame)
-        header_frame.pack(fill=tk.X, padx=(0, 17), pady=(0, 2))
+        header_frame.pack(fill=tk.X, padx=(40, 17), pady=(0, 2))
         
         ttk.Label(header_frame, text="Nom de la Dépense", style="Header.TLabel").pack(
             side=tk.LEFT, fill=tk.X, expand=True
@@ -240,7 +235,6 @@ class BudgetView:
             side=tk.RIGHT, padx=(0, 80)
         )
         
-        # Zone scrollable pour les dépenses
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
         self.scrollable_frame = ttk.Frame(canvas)
         scrollbar = ttk.Scrollbar(expenses_main_frame, orient="vertical", command=canvas.yview)
@@ -250,7 +244,6 @@ class BudgetView:
         canvas.pack(side="left", fill="both", expand=True)
         canvas_frame = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         
-        # Configuration du scrolling
         self.scrollable_frame.bind(
             "<Configure>", 
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
@@ -291,7 +284,6 @@ class BudgetView:
         summary_frame = ttk.Frame(parent, padding="10 0")
         summary_frame.pack(fill=tk.X, side=tk.BOTTOM)
         
-        # Ligne 1
         line1_frame = ttk.Frame(summary_frame)
         line1_frame.pack(fill=tk.X, pady=(5, 0))
         
@@ -305,7 +297,6 @@ class BudgetView:
         )
         self.label_total_effectue.pack(side=tk.RIGHT, anchor="e")
 
-        # Ligne 2
         line2_frame = ttk.Frame(summary_frame)
         line2_frame.pack(fill=tk.X, pady=(2, 10))
         
@@ -319,7 +310,6 @@ class BudgetView:
         )
         self.label_total_non_effectue.pack(side=tk.RIGHT, anchor="e")
         
-        # Ligne 3
         line3_frame = ttk.Frame(summary_frame)
         line3_frame.pack(fill=tk.X, pady=(2, 5))
         
@@ -328,7 +318,6 @@ class BudgetView:
         )
         self.label_total_emprunte.pack(side=tk.LEFT, anchor="w")
 
-        # Bouton reset
         bouton_reset = ttk.Button(
             summary_frame, text="🔄 Réinitialiser Tout", 
             command=self.controller.handle_reset, style="Red.TButton"
@@ -355,7 +344,6 @@ class BudgetView:
             self.update_expenses_display(display_data.depenses, categories)
             self.update_summary_display(display_data)
             
-            # Mettre à jour le titre de la fenêtre
             if display_data.nom != "Aucun mois":
                 self.master.title(f"Budget Manager - {display_data.nom}")
             else:
@@ -365,19 +353,63 @@ class BudgetView:
             logger.error(f"Erreur lors de la mise à jour complète: {e}")
 
     def update_expenses_display(self, depenses: List[Depense], categories: List[str]):
-        """Met à jour l'affichage des dépenses"""
+        """Met à jour l'affichage des dépenses (redessin complet)"""
         try:
-            # Supprimer les widgets existants
             for widget_dict in self.depenses_widgets:
                 widget_dict['frame'].destroy()
             self.depenses_widgets.clear()
 
-            # Créer les nouveaux widgets
             for i, depense in enumerate(depenses):
                 self._create_expense_widget(i, depense, categories)
                 
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour des dépenses: {e}")
+
+    # --- NOUVELLES MÉTHODES POUR MISE À JOUR OPTIMISÉE ---
+    def add_expense_widget(self, depense: Depense, categories: List[str]):
+        """Ajoute un seul widget de dépense à la fin de la liste."""
+        try:
+            index = len(self.depenses_widgets)
+            self._create_expense_widget(index, depense, categories)
+            self.master.update_idletasks()
+        except Exception as e:
+            logger.error(f"Erreur lors de l'ajout du widget de dépense: {e}")
+
+    def remove_expense_widget(self, index: int):
+        """Supprime un seul widget de dépense de la liste."""
+        try:
+            if 0 <= index < len(self.depenses_widgets):
+                widget_dict = self.depenses_widgets.pop(index)
+                widget_dict['frame'].destroy()
+                self._reindex_widgets(start_index=index)
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression du widget de dépense: {e}")
+    
+    def _reindex_widgets(self, start_index: int):
+        """Met à jour les callbacks des widgets après une suppression pour refléter les nouveaux indices."""
+        for i in range(start_index, len(self.depenses_widgets)):
+            widget_dict = self.depenses_widgets[i]
+            
+            # Recréer le callback avec le nouvel index 'i'
+            new_callback = lambda *args, idx=i: self.controller.handle_expense_update(idx)
+            
+            # Mettre à jour le bouton de suppression
+            widget_dict['remove_button'].configure(command=lambda idx=i: self.controller.handle_remove_expense(idx))
+            
+            # Mettre à jour les traces et les bindings
+            widget_dict['nom_entry'].bind("<FocusOut>", new_callback)
+            widget_dict['montant_entry'].bind("<FocusOut>", new_callback)
+            
+            # Pour les traces, il faut les supprimer avant de les recréer
+            # Note: trace_remove n'est pas simple. Une alternative est de ne pas le faire si
+            # la complexité est trop grande, mais la bonne pratique est de le faire.
+            # Ici, on simplifie en recréant les traces.
+            for var_name in ['categorie_var', 'effectue_var', 'emprunte_var']:
+                var = widget_dict[var_name]
+                # On ne peut pas facilement supprimer un callback spécifique, donc on les recrée
+                if var.trace_info():
+                    var.trace_remove('write', var.trace_info()[0][1]) # Supprime le premier callback
+                var.trace_add('write', new_callback)
 
     def update_summary_display(self, display_data: MoisDisplayData):
         """Met à jour le résumé financier"""
@@ -398,7 +430,6 @@ class BudgetView:
                 f"Total Emprunté : {display_data.total_emprunte:,.2f} €".replace(',', ' ')
             )
 
-            # Couleur conditionnelle pour l'argent restant
             if display_data.argent_restant < 0:
                 self.label_resultat.config(foreground="red")
             else:
@@ -420,29 +451,25 @@ class BudgetView:
     def get_new_mois_input(self) -> Optional[MoisInput]:
         """Récupère les données de création d'un nouveau mois"""
         try:
-            nom_mois = tk.simpledialog.askstring(
+            nom_mois = self.ask_for_string(
                 "Nouveau mois", 
                 "Nom du nouveau mois (ex: Janvier 2024):",
-                initialvalue=f"{datetime.now().strftime('%B %Y')}"
+                f"{datetime.now().strftime('%B %Y')}"
             )
-            
-            if not nom_mois:
-                return None
+            if not nom_mois: return None
                 
-            salaire_str = tk.simpledialog.askstring(
-                "Salaire", 
-                f"Salaire pour {nom_mois}:",
-                initialvalue="0"
-            )
-            
-            if salaire_str is None:  # Annulé
-                return None
+            salaire_str = self.ask_for_string("Salaire", f"Salaire pour {nom_mois}:", "0")
+            if salaire_str is None: return None
                 
             return MoisInput(nom=nom_mois, salaire=salaire_str or "0")
             
         except Exception as e:
             logger.error(f"Erreur lors de la saisie du nouveau mois: {e}")
             return None
+
+    def ask_for_string(self, title: str, prompt: str, initial_value: str = "") -> Optional[str]:
+        """Affiche une boîte de dialogue pour demander une chaîne de caractères."""
+        return simpledialog.askstring(title, prompt, initialvalue=initial_value, parent=self.master)
 
     def show_mois_selection_dialog(self, mois_list: List[Mois], 
                                   title: str = "Charger un mois",
@@ -462,7 +489,7 @@ class BudgetView:
                 title=f"Exporter {mois_nom}",
                 defaultextension=".json",
                 filetypes=[("Fichiers JSON", "*.json"), ("Tous les fichiers", "*.*")],
-                initialfile=f"{mois_nom.replace(' ', '_')}.json" # Correction ici : 'initialfile' au lieu de 'initialfilename'
+                initialfile=f"{mois_nom.replace(' ', '_')}.json"
             )
             return Path(filepath) if filepath else None
         except Exception as e:
@@ -481,9 +508,7 @@ class BudgetView:
             logger.error(f"Erreur lors de la sélection du fichier d'import: {e}")
             return None
 
-    # ===== MÉTHODES D'ACCÈS AUX DONNÉES =====
     def get_salaire_value(self) -> str:
-        """Récupère la valeur du salaire"""
         return self.salaire_var.get()
 
     def get_expense_value(self, index: int) -> Optional[Tuple[str, str, str, bool, bool]]:
@@ -506,39 +531,29 @@ class BudgetView:
         """Donne le focus à la dernière dépense"""
         try:
             if self.depenses_widgets:
-                last_entry = self.depenses_widgets[-1]['frame'].winfo_children()[0]
+                last_entry = self.depenses_widgets[-1]['frame'].winfo_children()[1]
                 last_entry.focus_set()
         except Exception as e:
             logger.error(f"Erreur lors du focus sur la dernière dépense: {e}")
 
     # ===== MÉTHODES DE MESSAGES =====
-    def show_success_message(self, message: str):
-        """Affiche un message de succès"""
-        messagebox.showinfo("Succès", message)
-
     def show_error_message(self, message: str):
-        """Affiche un message d'erreur"""
-        messagebox.showerror("Erreur", message)
+        messagebox.showerror("Erreur", message, parent=self.master)
 
     def show_warning_message(self, message: str):
-        """Affiche un message d'avertissement"""
-        messagebox.showwarning("Attention", message)
+        messagebox.showwarning("Attention", message, parent=self.master)
 
     def show_info_message(self, message: str):
-        """Affiche un message d'information"""
-        messagebox.showinfo("Information", message)
+        messagebox.showinfo("Information", message, parent=self.master)
 
     def ask_confirmation(self, title: str, message: str) -> bool:
-        """Demande une confirmation"""
-        return messagebox.askyesno(title, message)
+        return messagebox.askyesno(title, message, parent=self.master)
 
     def update_status(self, message: str):
-        """Met à jour la barre de statut"""
         self.status_var.set(message)
 
     # ===== GRAPHIQUES =====
     def show_graph_window(self, get_data_callback: Callable):
-        """Affiche la fenêtre des graphiques"""
         try:
             if self.graph_window and self.graph_window.winfo_exists():
                 self.graph_window.lift()
@@ -552,25 +567,29 @@ class BudgetView:
         """Crée un widget pour une dépense"""
         try:
             expense_frame = ttk.Frame(self.scrollable_frame)
-            expense_frame.pack(fill=tk.X, pady=2, padx=2)
+            expense_frame.pack(fill=tk.X, pady=1, padx=0)
 
-            # Variables
             nom_var = tk.StringVar(value=depense.nom)
             montant_var = tk.StringVar(value=f"{depense.montant:.2f}")
             categorie_var = tk.StringVar(value=depense.categorie)
             effectue_var = tk.BooleanVar(value=depense.effectue)
             emprunte_var = tk.BooleanVar(value=depense.emprunte)
             
-            widgets = {
-                'frame': expense_frame, 'nom_var': nom_var, 'montant_var': montant_var, 
-                'categorie_var': categorie_var, 'effectue_var': effectue_var,
-                'emprunte_var': emprunte_var
-            }
-            self.depenses_widgets.append(widgets)
-            
-            # Widgets d'entrée
+            remove_button = ttk.Button(
+                expense_frame, text="X", width=3, style="Red.TButton", 
+                command=lambda i=index: self.controller.handle_remove_expense(i)
+            )
+            remove_button.pack(side=tk.LEFT, padx=(0, 10))
+
             nom_entry = ttk.Entry(expense_frame, textvariable=nom_var)
             nom_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
+            
+            validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
+            montant_entry = ttk.Entry(
+                expense_frame, textvariable=montant_var, width=10, 
+                justify='right', validate="key", validatecommand=validate_cmd
+            )
+            montant_entry.pack(side=tk.LEFT, padx=(15, 10))
             
             cat_combo = ttk.Combobox(
                 expense_frame, textvariable=categorie_var, values=categories, 
@@ -578,14 +597,6 @@ class BudgetView:
             )
             cat_combo.pack(side=tk.LEFT, padx=(10, 0))
 
-            validate_cmd = (self.master.register(self._validate_numeric_input), '%P')
-            montant_entry = ttk.Entry(
-                expense_frame, textvariable=montant_var, width=10, 
-                justify='right', validate="key", validatecommand=validate_cmd
-            )
-            montant_entry.pack(side=tk.LEFT, padx=(5, 0))
-
-            # Frame pour les statuts
             status_frame = ttk.Frame(expense_frame, padding="5 2", style="StatusFrame.TFrame")
             status_frame.pack(side=tk.LEFT, padx=(2, 0))
 
@@ -602,18 +613,24 @@ class BudgetView:
             )
             check_emprunte.pack(side=tk.LEFT)
             Tooltip(check_emprunte, "Cochez si cette dépense est un prêt")
-
-            # Bouton supprimer
-            remove_button = ttk.Button(
-                expense_frame, text="X", width=3, style="Red.TButton", 
-                command=lambda i=index: self.controller.handle_remove_expense(i)
-            )
-            remove_button.pack(side=tk.RIGHT, padx=(10, 0))
             
-            # Callbacks pour les modifications
+            widgets = {
+                'frame': expense_frame, 'nom_var': nom_var, 'montant_var': montant_var, 
+                'categorie_var': categorie_var, 'effectue_var': effectue_var,
+                'emprunte_var': emprunte_var,
+                'remove_button': remove_button, 'nom_entry': nom_entry,
+                'montant_entry': montant_entry
+            }
+            self.depenses_widgets.append(widgets)
+            
             callback = lambda *args, idx=index: self.controller.handle_expense_update(idx)
-            nom_var.trace_add("write", callback)
+
+            nom_entry.bind("<FocusOut>", callback)
+            
+            # --- CORRECTION ---
+            # On utilise trace_add pour une mise à jour en temps réel
             montant_var.trace_add("write", callback)
+            
             categorie_var.trace_add("write", callback)
             effectue_var.trace_add("write", callback)
             emprunte_var.trace_add("write", callback)
@@ -623,15 +640,14 @@ class BudgetView:
 
     def _validate_numeric_input(self, value_if_allowed: str) -> bool:
         """Valide une entrée numérique"""
-        if value_if_allowed == "":
-            return True
+        if value_if_allowed == "": return True
         try:
             float(value_if_allowed.replace(',', '.'))
             return True
         except ValueError:
             return False
 
-
+# ... Le reste du fichier (MoisSelectionDialog, GraphWindow) reste inchangé ...
 class MoisSelectionDialog:
     """Boîte de dialogue pour la sélection d'un mois"""
     
@@ -644,53 +660,40 @@ class MoisSelectionDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
         
-        # Centrer la fenêtre
         self.dialog.update_idletasks()
         x = (self.dialog.winfo_screenwidth() // 2) - (500 // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (400 // 2)
         self.dialog.geometry(f"500x400+{x}+{y}")
         
-        # Contenu
         tk.Label(self.dialog, text=prompt, pady=10, font=("Arial", 12)).pack()
         
-        # Liste des mois
         self.listbox = tk.Listbox(self.dialog, selectmode=tk.SINGLE, font=("Arial", 10))
         for mois in mois_list:
             display_text = f"{mois.nom} (Salaire: {mois.salaire:.2f}€)"
             if mois.date_creation:
                 try:
-                    date_obj = datetime.fromisoformat(mois.date_creation.replace('Z', '+00:00'))
+                    date_obj = datetime.fromisoformat(mois.date_creation.split(' ')[0])
                     date_str = date_obj.strftime("%d/%m/%Y")
                     display_text += f" - Créé le {date_str}"
-                except ValueError:
+                except (ValueError, IndexError):
                     pass
             self.listbox.insert('end', display_text)
         
         self.listbox.pack(fill='both', expand=True, padx=10, pady=5)
         
-        # Boutons
         button_frame = ttk.Frame(self.dialog)
         button_frame.pack(pady=10)
         
-        ttk.Button(button_frame, text="Sélectionner", command=self._on_select).pack(
-            side='left', padx=5
-        )
-        ttk.Button(button_frame, text="Annuler", command=self._on_cancel).pack(
-            side='left', padx=5
-        )
+        ttk.Button(button_frame, text="Sélectionner", command=self._on_select).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Annuler", command=self._on_cancel).pack(side='left', padx=5)
         
-        # Double-clic pour sélectionner
         self.listbox.bind('<Double-Button-1>', lambda e: self._on_select())
         
-        # Focus sur la liste
         self.listbox.focus_set()
         if mois_list:
             self.listbox.selection_set(0)
         
-        # Stockage de la liste pour la sélection
         self.mois_list = mois_list
-        
-        # Attendre la fermeture
         self.dialog.wait_window()
     
     def _on_select(self):
@@ -701,7 +704,6 @@ class MoisSelectionDialog:
     
     def _on_cancel(self):
         self.dialog.destroy()
-
 
 class GraphWindow(tk.Toplevel):
     """Fenêtre des graphiques"""

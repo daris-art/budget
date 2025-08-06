@@ -22,45 +22,55 @@ class BudgetController(Observer):
         self.view = BudgetView(master, self)
         self.master = master
         
-        # Inscription comme observateur du modèle
         self.model.add_observer(self)
-        
-        # Configuration de la fenêtre
         self.master.protocol("WM_DELETE_WINDOW", self.handle_on_closing)
         
-        # Chargement initial
-        self._handle_initial_load()
+        self.view.update_status("Initialisation...")
+        self.master.after(100, self._handle_initial_load)
         
         logger.info("BudgetController initialisé")
     
     # ===== PATTERN OBSERVER =====
     def on_model_changed(self, event_type: str, data=None):
-        """Réagit aux changements du modèle"""
+        """Réagit aux changements du modèle de manière optimisée."""
         try:
-            if event_type in ['mois_created', 'mois_loaded', 'data_imported']:
-                self._refresh_complete_view()
-            elif event_type in ['expense_added', 'expense_updated', 'expense_removed', 
-                              'expenses_sorted', 'all_expenses_cleared']:
-                self._refresh_expenses_view()
-            elif event_type == 'salaire_updated':
+            # --- MODIFICATION POUR RAFRAÎCHISSEMENT OPTIMISÉ ---
+            
+            if event_type == 'expense_added':
+                # Ajout ciblé d'un seul widget
+                self.view.add_expense_widget(data, self.model.categories)
                 self._refresh_summary_view()
-            elif event_type == 'mois_cleared':
+            
+            elif event_type == 'expense_removed':
+                # Suppression ciblée d'un seul widget
+                self.view.remove_expense_widget(data['index'])
+                self._refresh_summary_view()
+            
+            elif event_type in ['mois_created', 'mois_loaded', 'data_imported', 
+                                'expenses_sorted', 'all_expenses_cleared', 
+                                'mois_cleared', 'mois_duplicated']:
+                # Opérations lourdes qui nécessitent un redessin complet
                 self._refresh_complete_view()
+            
+            elif event_type in ['salaire_updated', 'expense_updated']:
+                # Opération légère qui ne met à jour que le résumé
+                self._refresh_summary_view()
             
             logger.debug(f"Vue mise à jour suite à l'événement: {event_type}")
             
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour de la vue: {e}")
             self.view.show_error_message("Erreur lors de la mise à jour de l'interface")
-    
+
     # ===== GESTION DE L'APPLICATION =====
     def _handle_initial_load(self):
         """Gère le chargement initial de l'application"""
         try:
+            self.model.initialize_backend()
             result = self.model.load_data_from_last_session()
             self._handle_result(result)
+            self.view.update_status("Prêt.")
             
-            # Si aucun mois n'est disponible, proposer d'en créer un
             if not result.is_success and "Aucun mois disponible" in result.error:
                 self.handle_create_new_mois()
                 
@@ -71,26 +81,22 @@ class BudgetController(Observer):
     def handle_on_closing(self):
         """Gère la fermeture de l'application"""
         try:
-            plt.close('all')  # Fermer tous les graphiques matplotlib
+            plt.close('all')
             self.view.master.destroy()
             logger.info("Application fermée proprement")
         except Exception as e:
             logger.error(f"Erreur lors de la fermeture: {e}")
-            self.view.master.destroy()  # Forcer la fermeture
+            self.view.master.destroy()
     
     # ===== GESTION DES MOIS =====
     def handle_create_new_mois(self):
         """Gère la création d'un nouveau mois"""
         try:
-            # 1. Récupération des données utilisateur
             user_input = self.view.get_new_mois_input()
             if not user_input:
                 return
             
-            # 2. Délégation au modèle
             result = self.model.create_mois(user_input.nom, user_input.salaire)
-            
-            # 3. Gestion du résultat
             self._handle_result(result)
             
         except Exception as e:
@@ -100,7 +106,6 @@ class BudgetController(Observer):
     def handle_load_mois(self):
         """Gère le chargement d'un mois existant"""
         try:
-            # 1. Récupération de la liste des mois
             result = self.model.get_all_mois()
             if not result.is_success:
                 self._handle_result(result)
@@ -111,12 +116,10 @@ class BudgetController(Observer):
                 self.view.show_info_message("Aucun mois disponible. Créez un nouveau mois.")
                 return
             
-            # 2. Sélection par l'utilisateur
             selected_mois = self.view.show_mois_selection_dialog(all_mois)
             if not selected_mois:
                 return
             
-            # 3. Chargement du mois sélectionné
             load_result = self.model.load_mois(selected_mois.nom)
             self._handle_result(load_result)
             
@@ -127,7 +130,6 @@ class BudgetController(Observer):
     def handle_delete_mois(self):
         """Gère la suppression d'un mois"""
         try:
-            # 1. Récupération de la liste des mois
             result = self.model.get_all_mois()
             if not result.is_success:
                 self._handle_result(result)
@@ -138,16 +140,13 @@ class BudgetController(Observer):
                 self.view.show_info_message("Aucun mois disponible.")
                 return
             
-            # 2. Avertissement si c'est le seul mois
             if len(all_mois) == 1 and self.model.mois_actuel:
                 if not self.view.ask_confirmation(
                     "Confirmation", 
-                    "Vous êtes sur le point de supprimer le seul mois disponible. "
-                    "Cela effacera toutes vos données. Continuer ?"
+                    "Vous êtes sur le point de supprimer le seul mois disponible. Continuer ?"
                 ):
                     return
             
-            # 3. Sélection du mois à supprimer
             selected_mois = self.view.show_mois_selection_dialog(
                 all_mois, 
                 title="Supprimer un mois",
@@ -156,20 +155,43 @@ class BudgetController(Observer):
             if not selected_mois:
                 return
             
-            # 4. Confirmation finale
             if not self.view.ask_confirmation(
                 "Confirmation", 
                 f"Supprimer définitivement le mois '{selected_mois.nom}' ?"
             ):
                 return
             
-            # 5. Suppression
             delete_result = self.model.delete_mois(selected_mois.nom)
             self._handle_result(delete_result)
             
         except Exception as e:
             logger.error(f"Erreur lors de la suppression d'un mois: {e}")
             self.view.show_error_message("Erreur lors de la suppression du mois")
+
+    def handle_duplicate_mois(self):
+        """Gère la duplication du mois actuel."""
+        if not self.model.mois_actuel:
+            self.view.show_warning_message("Veuillez charger un mois avant de le dupliquer.")
+            return
+
+        try:
+            default_name = f"{self.model.mois_actuel.nom} (copie)"
+            new_name = self.view.ask_for_string("Dupliquer le mois", 
+                                                "Entrez le nom pour la copie :", 
+                                                default_name)
+
+            if not new_name:
+                return
+
+            result = self.model.duplicate_mois(new_name)
+            self._handle_result(result)
+
+            if result.is_success:
+                self.model.load_mois(new_name)
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la duplication du mois: {e}")
+            self.view.show_error_message("Une erreur inattendue est survenue lors de la duplication.")
     
     # ===== GESTION DU SALAIRE =====
     def handle_salaire_update(self, *args):
@@ -180,7 +202,6 @@ class BudgetController(Observer):
             
             if not result.is_success:
                 logger.warning(f"Erreur lors de la mise à jour du salaire: {result.error}")
-                # Ne pas afficher d'erreur pour chaque frappe, juste logger
             
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du salaire: {e}")
@@ -195,7 +216,6 @@ class BudgetController(Observer):
             
             result = self.model.add_expense()
             if result.is_success:
-                # Donner le focus à la nouvelle dépense
                 self.view.focus_last_expense()
             else:
                 self._handle_result(result)
@@ -270,12 +290,10 @@ class BudgetController(Observer):
                 self.view.show_warning_message("Aucun mois chargé à exporter.")
                 return
             
-            # Sélection du fichier
             filepath = self.view.get_export_filepath(self.model.mois_actuel.nom)
             if not filepath:
                 return
             
-            # Export
             result = self.model.export_to_json(filepath)
             self._handle_result(result)
             
@@ -290,19 +308,16 @@ class BudgetController(Observer):
                 self.view.show_warning_message("Veuillez d'abord créer ou charger un mois.")
                 return
             
-            # Sélection du fichier
             filepath = self.view.get_import_filepath()
             if not filepath:
                 return
             
-            # Confirmation
             if not self.view.ask_confirmation(
                 "Confirmation", 
                 "L'import remplacera toutes les dépenses actuelles. Continuer ?"
             ):
                 return
             
-            # Import
             result = self.model.import_from_json(filepath)
             self._handle_result(result)
             
@@ -335,32 +350,14 @@ class BudgetController(Observer):
         try:
             display_data = self.model.get_display_data()
             self.view.update_complete_display(display_data, self.model.categories)
+            self.view.update_status("Prêt.")
         except Exception as e:
             logger.error(f"Erreur lors du rafraîchissement complet de la vue: {e}")
-    
-    def _refresh_expenses_view(self):
-        """Rafraîchit uniquement la partie dépenses de la vue"""
-        try:
-            display_data = self.model.get_display_data()
-            self.view.update_expenses_display(display_data.depenses, self.model.categories)
-            self.view.update_summary_display(display_data)
-        except Exception as e:
-            logger.error(f"Erreur lors du rafraîchissement des dépenses: {e}")
     
     def _refresh_summary_view(self):
         """Rafraîchit uniquement le résumé financier"""
         try:
             display_data = self.model.get_display_data()
             self.view.update_summary_display(display_data)
-            self.view.set_salaire_display(display_data.salaire)
         except Exception as e:
             logger.error(f"Erreur lors du rafraîchissement du résumé: {e}")
-    
-    # ===== MÉTHODES DE DEBUG =====
-    def get_controller_state(self):
-        """Retourne l'état du controller (pour debug)"""
-        return {
-            'model_state': self.model.get_model_state(),
-            'view_initialized': self.view is not None,
-            'observers_count': len(self.model._observers)
-        }
