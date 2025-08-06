@@ -197,6 +197,37 @@ class BudgetModel(Observable):
         except DatabaseError as e:
             logger.error(f"Erreur DB lors récupération mois: {e}")
             return Result.error("Erreur lors de la récupération des mois")
+        
+    def rename_mois(self, new_name: str) -> Result:
+        """Renomme le mois actuel."""
+        if not self.mois_actuel:
+            return Result.error("Aucun mois n'est chargé.")
+
+        original_name = self.mois_actuel.nom
+        if original_name == new_name.strip():
+            return Result.success("Le nom est identique, aucune modification n'a été apportée.")
+
+        try:
+            validation_result = self._validator.validate_mois_data(new_name, str(self.mois_actuel.salaire))
+            if "Le nom du mois est requis" in validation_result.errors:
+                 return Result.error("Le nouveau nom ne peut pas être vide.")
+
+            validated_new_name = validation_result.validated_data['nom']
+
+            self._db_manager.update_mois_name(self.mois_actuel.id, validated_new_name)
+            self.mois_actuel.nom = validated_new_name
+            self._save_last_mois(validated_new_name)
+
+            self.notify_observers('mois_renamed', {'new_name': validated_new_name})
+            return Result.success(f"Mois '{original_name}' renommé en '{validated_new_name}'.")
+
+        except DatabaseError as e:
+            logger.error(f"Erreur DB lors du renommage: {e}")
+            return Result.error(str(e))
+        except Exception as e:
+            logger.critical(f"Erreur inattendue lors du renommage: {e}")
+            return Result.error("Une erreur inattendue est survenue.")
+
     
     # ===== GESTION DU SALAIRE =====
     def set_salaire(self, salaire_str: str) -> Result:

@@ -261,6 +261,19 @@ class DatabaseManager:
                 conn.commit()
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la mise à jour du salaire: {e}")
+        
+    def update_mois_name(self, mois_id: int, new_name: str):
+        """Met à jour le nom d'un mois."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE mois SET nom = ? WHERE id = ?', (new_name, mois_id))
+                conn.commit()
+        except sqlite3.IntegrityError:
+            raise DatabaseError(f"Le nom '{new_name}' existe déjà.")
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Erreur lors du renommage du mois: {e}")
+    
     
     def get_depenses_by_mois(self, mois_id: int) -> List[Depense]:
         """Récupère les dépenses d'un mois"""

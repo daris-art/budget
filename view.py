@@ -69,6 +69,10 @@ class BudgetView:
         style.configure("Orange.TButton", foreground="white", background="#ff9800",
                        font=("Arial", 10))
         style.map("Orange.TButton", background=[('active', '#f57c00')])
+
+        style.configure("Gray.TButton", foreground="white", background="#6c757d",
+                       font=("Arial", 10))
+        style.map("Gray.TButton", background=[('active', '#5a6268')])
         
         style.configure("Effectue.TCheckbutton", font=("Arial", 11))
         style.map("Effectue.TCheckbutton",
@@ -129,6 +133,13 @@ class BudgetView:
         )
         bouton_nouveau_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_nouveau_mois, "Créer un nouveau budget mensuel")
+
+        bouton_renommer = ttk.Button(
+            buttons_frame, text="✏️ Renommer Mois",
+            command=self.controller.handle_rename_mois, style="Gray.TButton"
+        )
+        bouton_renommer.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_renommer, "Renommer le mois actuel")
         
         bouton_dupliquer = ttk.Button(
             buttons_frame, text="📋 Dupliquer Mois",
@@ -433,6 +444,15 @@ class BudgetView:
             self.salaire_var.trace_add('write', self.controller.handle_salaire_update)
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du salaire: {e}")
+
+    def update_mois_title(self, new_name: str):
+        """Met à jour uniquement le titre du mois et le titre de la fenêtre."""
+        try:
+            self.mois_actuel_var.set(new_name)
+            self.master.title(f"Budget Manager - {new_name}")
+            self.update_status(f"Mois renommé en '{new_name}'.")
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du titre du mois: {e}")
 
     # ===== MÉTHODES D'INTERACTION AVEC L'UTILISATEUR =====
     def get_new_mois_input(self) -> Optional[MoisInput]:

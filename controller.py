@@ -49,6 +49,9 @@ class BudgetController(Observer):
             
             elif event_type in ['salaire_updated', 'expense_updated']:
                 self._refresh_summary_view()
+                
+            elif event_type == 'mois_renamed':
+                self.view.update_mois_title(data['new_name'])
             
             logger.debug(f"Vue mise à jour suite à l'événement: {event_type}")
             
@@ -193,6 +196,29 @@ class BudgetController(Observer):
             logger.error(f"Erreur lors de la duplication du mois: {e}")
             self.view.show_error_message("Une erreur inattendue est survenue lors de la duplication.")
     
+    def handle_rename_mois(self):
+        """Gère le renommage du mois actuel."""
+        if not self.model.mois_actuel:
+            self.view.show_warning_message("Veuillez charger un mois avant de le renommer.")
+            return
+
+        try:
+            current_name = self.model.mois_actuel.nom
+            new_name = self.view.ask_for_string("Renommer le mois",
+                                                f"Entrez le nouveau nom pour '{current_name}':",
+                                                current_name)
+
+            if not new_name or new_name == current_name:
+                return
+
+            result = self.model.rename_mois(new_name)
+            self._handle_result(result)
+
+        except Exception as e:
+            logger.error(f"Erreur lors du renommage du mois: {e}")
+            self.view.show_error_message("Une erreur inattendue est survenue lors du renommage.")
+
+
     # ===== GESTION DU SALAIRE =====
     def handle_salaire_update(self, *args):
         """Gère la mise à jour du salaire"""
