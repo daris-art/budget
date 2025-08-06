@@ -34,26 +34,20 @@ class BudgetController(Observer):
     def on_model_changed(self, event_type: str, data=None):
         """Réagit aux changements du modèle de manière optimisée."""
         try:
-            # --- MODIFICATION POUR RAFRAÎCHISSEMENT OPTIMISÉ ---
-            
             if event_type == 'expense_added':
-                # Ajout ciblé d'un seul widget
                 self.view.add_expense_widget(data, self.model.categories)
                 self._refresh_summary_view()
             
             elif event_type == 'expense_removed':
-                # Suppression ciblée d'un seul widget
                 self.view.remove_expense_widget(data['index'])
                 self._refresh_summary_view()
             
             elif event_type in ['mois_created', 'mois_loaded', 'data_imported', 
                                 'expenses_sorted', 'all_expenses_cleared', 
                                 'mois_cleared', 'mois_duplicated']:
-                # Opérations lourdes qui nécessitent un redessin complet
                 self._refresh_complete_view()
             
             elif event_type in ['salaire_updated', 'expense_updated']:
-                # Opération légère qui ne met à jour que le résumé
                 self._refresh_summary_view()
             
             logger.debug(f"Vue mise à jour suite à l'événement: {event_type}")
@@ -104,7 +98,7 @@ class BudgetController(Observer):
             self.view.show_error_message("Erreur lors de la création du nouveau mois")
     
     def handle_load_mois(self):
-        """Gère le chargement d'un mois existant"""
+        """Gère le chargement d'un mois existant de manière asynchrone."""
         try:
             result = self.model.get_all_mois()
             if not result.is_success:
@@ -120,12 +114,18 @@ class BudgetController(Observer):
             if not selected_mois:
                 return
             
-            load_result = self.model.load_mois(selected_mois.nom)
-            self._handle_result(load_result)
+            self.view.clear_for_loading(f"Chargement du mois '{selected_mois.nom}'...")
             
+            self.master.after(50, lambda: self._load_mois_async(selected_mois.nom))
+
         except Exception as e:
             logger.error(f"Erreur lors du chargement d'un mois: {e}")
             self.view.show_error_message("Erreur lors du chargement du mois")
+
+    def _load_mois_async(self, nom_mois: str):
+        """Fonction helper pour charger les données du mois sans bloquer l'UI."""
+        load_result = self.model.load_mois(nom_mois)
+        self._handle_result(load_result)
     
     def handle_delete_mois(self):
         """Gère la suppression d'un mois"""
@@ -217,6 +217,9 @@ class BudgetController(Observer):
             result = self.model.add_expense()
             if result.is_success:
                 self.view.focus_last_expense()
+                # --- MODIFICATION ---
+                # Forcer le défilement vers le bas
+                self.view.scroll_to_bottom()
             else:
                 self._handle_result(result)
                 

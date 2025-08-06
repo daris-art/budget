@@ -121,7 +121,7 @@ class BudgetView:
         """Crée tous les widgets de l'interface"""
         try:
             self.master.title("Calculateur de Budget Mensuel (MVC) - Amélioré")
-            self.master.geometry("1024x930")
+            self.master.geometry("1024x1024")
             self.master.minsize(960, 600)
             
             main_frame = ttk.Frame(self.master, padding="10")
@@ -236,6 +236,7 @@ class BudgetView:
         )
         
         canvas = tk.Canvas(expenses_main_frame, borderwidth=0)
+        self.canvas = canvas
         self.scrollable_frame = ttk.Frame(canvas)
         scrollbar = ttk.Scrollbar(expenses_main_frame, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -365,7 +366,6 @@ class BudgetView:
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour des dépenses: {e}")
 
-    # --- NOUVELLES MÉTHODES POUR MISE À JOUR OPTIMISÉE ---
     def add_expense_widget(self, depense: Depense, categories: List[str]):
         """Ajoute un seul widget de dépense à la fin de la liste."""
         try:
@@ -390,26 +390,43 @@ class BudgetView:
         for i in range(start_index, len(self.depenses_widgets)):
             widget_dict = self.depenses_widgets[i]
             
-            # Recréer le callback avec le nouvel index 'i'
             new_callback = lambda *args, idx=i: self.controller.handle_expense_update(idx)
             
-            # Mettre à jour le bouton de suppression
             widget_dict['remove_button'].configure(command=lambda idx=i: self.controller.handle_remove_expense(idx))
             
-            # Mettre à jour les traces et les bindings
-            widget_dict['nom_entry'].bind("<FocusOut>", new_callback)
-            widget_dict['montant_entry'].bind("<FocusOut>", new_callback)
-            
-            # Pour les traces, il faut les supprimer avant de les recréer
-            # Note: trace_remove n'est pas simple. Une alternative est de ne pas le faire si
-            # la complexité est trop grande, mais la bonne pratique est de le faire.
-            # Ici, on simplifie en recréant les traces.
-            for var_name in ['categorie_var', 'effectue_var', 'emprunte_var']:
+            # --- CORRECTION DU BUG DE RÉ-INDEXATION ---
+            # On ne re-lie que les événements qui dépendent de l'index
+            for var_name in ['montant_var', 'categorie_var', 'effectue_var', 'emprunte_var', 'nom_var']:
                 var = widget_dict[var_name]
-                # On ne peut pas facilement supprimer un callback spécifique, donc on les recrée
                 if var.trace_info():
-                    var.trace_remove('write', var.trace_info()[0][1]) # Supprime le premier callback
+                    trace_name = var.trace_info()[0][1]
+                    var.trace_remove('write', trace_name)
                 var.trace_add('write', new_callback)
+
+    def clear_for_loading(self, status_message: str):
+        """Prépare l'interface pour un chargement en effaçant les données actuelles."""
+        try:
+            for widget_dict in self.depenses_widgets:
+                widget_dict['frame'].destroy()
+            self.depenses_widgets.clear()
+            
+            self.mois_actuel_var.set("")
+            # Utiliser trace_remove pour éviter de déclencher le callback
+            if self.salaire_var.trace_info():
+                trace_name = self.salaire_var.trace_info()[0][1]
+                self.salaire_var.trace_remove('write', trace_name)
+            self.salaire_var.set("0.00")
+            self.salaire_var.trace_add('write', self.controller.handle_salaire_update)
+            
+            empty_data = MoisDisplayData(nom="", salaire=0, depenses=[], total_depenses=0,
+                                         argent_restant=0, total_effectue=0, total_non_effectue=0,
+                                         total_emprunte=0)
+            self.update_summary_display(empty_data)
+            
+            self.update_status(status_message)
+            self.master.update_idletasks()
+        except Exception as e:
+            logger.error(f"Erreur lors de la préparation au chargement: {e}")
 
     def update_summary_display(self, display_data: MoisDisplayData):
         """Met à jour le résumé financier"""
@@ -441,9 +458,15 @@ class BudgetView:
     def set_salaire_display(self, salaire: float):
         """Met à jour l'affichage du salaire"""
         try:
+            if self.salaire_var.trace_info():
+                trace_name = self.salaire_var.trace_info()[0][1]
+                self.salaire_var.trace_remove('write', trace_name)
+            
             current_val = self.salaire_var.get().replace(',', '.')
             if current_val != f"{salaire:.2f}":
                 self.salaire_var.set(f"{salaire:.2f}")
+                
+            self.salaire_var.trace_add('write', self.controller.handle_salaire_update)
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du salaire: {e}")
 
@@ -536,6 +559,13 @@ class BudgetView:
         except Exception as e:
             logger.error(f"Erreur lors du focus sur la dernière dépense: {e}")
 
+    def scroll_to_bottom(self):
+        """Fait défiler la liste des dépenses jusqu'en bas."""
+        try:
+            self.master.after(100, lambda: self.canvas.yview_moveto(1.0))
+        except Exception as e:
+            logger.warning(f"Impossible de faire défiler vers le bas: {e}")
+
     # ===== MÉTHODES DE MESSAGES =====
     def show_error_message(self, message: str):
         messagebox.showerror("Erreur", message, parent=self.master)
@@ -625,12 +655,8 @@ class BudgetView:
             
             callback = lambda *args, idx=index: self.controller.handle_expense_update(idx)
 
-            nom_entry.bind("<FocusOut>", callback)
-            
-            # --- CORRECTION ---
-            # On utilise trace_add pour une mise à jour en temps réel
+            nom_var.trace_add("write", callback)
             montant_var.trace_add("write", callback)
-            
             categorie_var.trace_add("write", callback)
             effectue_var.trace_add("write", callback)
             emprunte_var.trace_add("write", callback)
