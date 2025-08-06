@@ -1,6 +1,5 @@
 # controller.py - Controller amélioré avec architecture MVC stricte
 
-from tkinter import filedialog, simpledialog, messagebox
 import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import datetime
