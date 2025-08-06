@@ -155,20 +155,6 @@ class BudgetView:
         bouton_supprimer_mois.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_supprimer_mois, "Supprimer définitivement un mois")
 
-        bouton_export = ttk.Button(
-            buttons_frame, text="📤 Exporter JSON", 
-            command=self.controller.handle_export_to_json, style="Blue.TButton"
-        )
-        bouton_export.pack(side=tk.LEFT, padx=5)
-        Tooltip(bouton_export, "Exporter le mois actuel vers un fichier JSON")
-
-        bouton_import = ttk.Button(
-            buttons_frame, text="📥 Importer JSON", 
-            command=self.controller.handle_import_from_json, style="Blue.TButton"
-        )
-        bouton_import.pack(side=tk.LEFT, padx=5)
-        Tooltip(bouton_import, "Importer des données depuis un fichier JSON")
-
         self.label_mois_actuel = ttk.Label(
             top_frame, 
             textvariable=self.mois_actuel_var, 
@@ -257,6 +243,21 @@ class BudgetView:
         )
         bouton_graph.pack(side=tk.LEFT, padx=5)
         Tooltip(bouton_graph, "Afficher une représentation graphique des dépenses")
+        
+        # --- Boutons déplacés ici ---
+        bouton_export = ttk.Button(
+            action_frame, text="📤 Exporter JSON", 
+            command=self.controller.handle_export_to_json, style="Blue.TButton"
+        )
+        bouton_export.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_export, "Exporter le mois actuel vers un fichier JSON")
+
+        bouton_import = ttk.Button(
+            action_frame, text="📥 Importer JSON", 
+            command=self.controller.handle_import_from_json, style="Blue.TButton"
+        )
+        bouton_import.pack(side=tk.LEFT, padx=5)
+        Tooltip(bouton_import, "Importer des données depuis un fichier JSON")
 
     def _create_summary_section(self, parent):
         """Crée la section de résumé financier"""
