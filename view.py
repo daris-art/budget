@@ -61,6 +61,14 @@ class BudgetView(QMainWindow):
         btn_nouveau.clicked.connect(self.controller.handle_create_mois)
         layout.addWidget(btn_nouveau)
 
+        btn_import_json = QPushButton("📥 Importer JSON")
+        btn_import_json.clicked.connect(self.controller.handle_import_from_json)
+        layout.addWidget(btn_import_json)
+
+        btn_export_json = QPushButton("📤 Exporter JSON")
+        btn_export_json.clicked.connect(self.controller.handle_export_to_json)
+        layout.addWidget(btn_export_json)
+
         btn_importer_excel = QPushButton("📥 Importer Excel")
         btn_importer_excel.setObjectName("GreenButton")
         btn_importer_excel.clicked.connect(self.controller.handle_import_from_excel)
