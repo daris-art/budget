@@ -187,7 +187,7 @@ class BudgetModel(Observable):
             logger.critical(f"Erreur inattendue lors suppression mois: {e}")
             return Result.error("Une erreur inattendue s'est produite")
 
-    def duplicate_mois(self, new_name: str, reset_status: bool = True) -> Result:
+    def duplicate_mois(self, new_name: str, reset_status: bool = False) -> Result:
         """
         Duplique le mois actuel avec un nouveau nom.
         
@@ -203,19 +203,15 @@ class BudgetModel(Observable):
             if not new_name or not new_name.strip():
                 return Result.error("Le nom du nouveau mois ne peut pas être vide.")
             
-            # 2. Création du nouveau mois dans la base de données
-            new_mois_id = self._db_manager.create_mois(new_name, self.mois_actuel.salaire)
+            # On délègue la logique de bas niveau au DatabaseManager
+            result = self._db_manager.duplicate_mois(self.mois_actuel.id, new_name.strip())
             
-            # 3. Duplication des dépenses
-            for depense in self._depenses:
-                new_depense = Depense(
-                    nom=depense.nom,
-                    montant=depense.montant,
-                    categorie=depense.categorie,
-                    effectue=False if reset_status else depense.effectue,
-                    emprunte=False if reset_status else depense.emprunte
-                )
-                self._db_manager.create_depense(new_mois_id, new_depense)
+            # --- CORRECTION ---
+            if result.is_success:
+                # Si la duplication réussit, on charge ce nouveau mois pour l'afficher.
+                # La méthode load_mois s'occupe déjà d'envoyer la bonne notification
+                # à la vue pour qu'elle se mette à jour complètement.
+                self.load_mois(new_name.strip())
             
             # 4. Notification (sans charger le mois ici)
             self.notify_observers('mois_duplicated', {'new_name': new_name})
@@ -339,36 +335,35 @@ class BudgetModel(Observable):
             logger.critical(f"Erreur inattendue lors ajout dépense: {e}")
             return Result.error("Une erreur inattendue s'est produite")
     
-    def update_expense(self, index: int, nom: str, montant_str: str, 
-                      categorie: str, effectue: bool, emprunte: bool) -> Result:
-        """Met à jour une dépense"""
+    # Dans model.py, remplacez la méthode update_expense dans la classe BudgetModel
+
+    def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, categorie: str, effectue: bool, emprunte: bool) -> Result:
+        """Met à jour une dépense existante."""
         if not (0 <= index < len(self._depenses)):
             return Result.error("Index de dépense invalide")
-        
+
+        # La validation pourrait être étendue pour inclure la date
+        validation = self._validator.validate_expense_data(nom, montant_str, categorie)
+        if not validation.is_valid:
+            return Result.error("\n".join(validation.errors))
+
+        depense_a_jour = self._depenses[index]
+        depense_a_jour.nom = validation.validated_data['nom']
+        depense_a_jour.montant = validation.validated_data['montant']
+        depense_a_jour.categorie = validation.validated_data['categorie']
+        # --- MODIFICATION : Mise à jour de la date dans l'objet ---
+        depense_a_jour.date_depense = date_depense
+        depense_a_jour.effectue = effectue
+        depense_a_jour.emprunte = emprunte
+        # Note: est_credit n'est pas modifié ici, il ne l'est qu'à la création/import.
+
         try:
-            validation_result = self._validator.validate_expense_data(nom, montant_str, categorie)
-            if not validation_result.is_valid:
-                logger.warning(f"Données de dépense partiellement invalides: {validation_result.errors}")
-            
-            depense = self._depenses[index]
-            depense.nom = validation_result.validated_data.get('nom', nom)
-            depense.montant = validation_result.validated_data.get('montant', 0.0)
-            depense.categorie = validation_result.validated_data.get('categorie', categorie)
-            depense.effectue = effectue
-            depense.emprunte = emprunte
-            
-            self._db_manager.update_depense(depense)
-            
-            self.notify_observers('expense_updated', {'index': index, 'depense': depense})
-            return Result.success("Dépense mise à jour")
-            
+            self._db_manager.update_depense(depense_a_jour)
+            self.notify_observers('expense_updated', {'index': index, 'depense': depense_a_jour})
+            return Result.success()
         except DatabaseError as e:
-            logger.error(f"Erreur DB lors mise à jour dépense: {e}")
-            return Result.error("Erreur lors de la mise à jour de la dépense")
-        except Exception as e:
-            logger.critical(f"Erreur inattendue lors mise à jour dépense: {e}")
-            return Result.error("Une erreur inattendue s'est produite")
-    
+            return Result.error(str(e))
+            
     def remove_expense(self, index: int) -> Result:
         """Supprime une dépense"""
         if not (0 <= index < len(self._depenses)):
@@ -422,19 +417,26 @@ class BudgetModel(Observable):
     
     # ===== CALCULS FINANCIERS =====
     def get_total_depenses(self) -> float:
-        return sum(d.montant for d in self._depenses)
-    
-    def get_argent_restant(self) -> float:
-        return self.salaire - self.get_total_depenses()
-    
+        """Retourne le total des dépenses (opérations de débit uniquement)."""
+        # On ne somme que les montants où 'est_credit' est False
+        return sum(d.montant for d in self._depenses if not d.est_credit)
+
     def get_total_depenses_effectuees(self) -> float:
-        return sum(d.montant for d in self._depenses if d.effectue)
-    
+        """Retourne le total des dépenses effectuées (débits uniquement)."""
+        # On ajoute la condition 'not d.est_credit'
+        return sum(d.montant for d in self._depenses if d.effectue and not d.est_credit)
+
     def get_total_depenses_non_effectuees(self) -> float:
-        return sum(d.montant for d in self._depenses if not d.effectue)
+        """Retourne le total des dépenses prévues (débits uniquement)."""
+        total_depenses = self.get_total_depenses()
+        total_effectue = self.get_total_depenses_effectuees()
+        return total_depenses - total_effectue
     
     def get_total_emprunte(self) -> float:
         return sum(d.montant for d in self._depenses if d.emprunte)
+    
+    def get_argent_restant(self) -> float:
+        return self.salaire - self.get_total_depenses()
 
     def get_display_data(self) -> Optional[MoisDisplayData]:
         """Retourne un DTO avec toutes les données nécessaires pour l'affichage complet."""

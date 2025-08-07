@@ -60,6 +60,15 @@ class BudgetView(QMainWindow):
         btn_nouveau = QPushButton("➕ Nouveau")
         btn_nouveau.clicked.connect(self.controller.handle_create_mois)
         layout.addWidget(btn_nouveau)
+        
+        btn_renommer = QPushButton("✏️ Renommer")
+        btn_renommer.clicked.connect(self.controller.handle_rename_mois)
+        layout.addWidget(btn_renommer)
+        
+        btn_dupliquer = QPushButton("📋 Dupliquer")
+        btn_dupliquer.setToolTip("Dupliquer le mois actuel avec toutes ses opérations")
+        btn_dupliquer.clicked.connect(self.controller.handle_duplicate_mois)
+        layout.addWidget(btn_dupliquer)
 
         btn_import_json = QPushButton("📥 Importer JSON")
         btn_import_json.clicked.connect(self.controller.handle_import_from_json)
@@ -73,10 +82,6 @@ class BudgetView(QMainWindow):
         btn_importer_excel.setObjectName("GreenButton")
         btn_importer_excel.clicked.connect(self.controller.handle_import_from_excel)
         layout.addWidget(btn_importer_excel)
-        
-        btn_renommer = QPushButton("✏️ Renommer")
-        btn_renommer.clicked.connect(self.controller.handle_rename_mois)
-        layout.addWidget(btn_renommer)
         
         btn_supprimer = QPushButton("🗑️ Supprimer")
         btn_supprimer.setObjectName("RedButton")
@@ -115,30 +120,29 @@ class BudgetView(QMainWindow):
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()
-        headers = ["Nom", "Montant (€)", "Catégorie", "Payé", "Prêt", "Actions"]
+        # --- MODIFICATION : Ajout de "Date" à l'en-tête ---
+        headers = ["Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
+            
             if header == "Nom":
-                # Ajoute une marge intérieure de 5 pixels à gauche du texte.
-                label.setIndent(15)
-                # On le garde aligné à gauche
+                label.setIndent(5)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            elif header in ("Payé", "Prêt"):
-                label.setProperty("cssClass", "shiftedHeader")
-                alignment = Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+            elif header in ("Payé", "Prêt", "Actions"):
+                alignment = Qt.AlignmentFlag.AlignCenter
             else:
-                # Pour tous les autres titres, on garde l'alignement à gauche
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            
             header_layout.addWidget(label, 0, i, alignment)
-
-        # On définit les proportions des colonnes pour l'en-tête.
-        # La colonne "Nom" (0) prendra plus de place.
+        
+        # --- MODIFICATION : Ajustement des proportions des colonnes ---
         header_layout.setColumnStretch(0, 4)  # Nom
         header_layout.setColumnStretch(1, 2)  # Montant
-        header_layout.setColumnStretch(2, 3)  # Catégorie
-        header_layout.setColumnStretch(3, 1)  # Payé
-        header_layout.setColumnStretch(4, 1)  # Prêt
-        header_layout.setColumnStretch(5, 1)  # Actions
+        header_layout.setColumnStretch(2, 2)  # Date (nouveau)
+        header_layout.setColumnStretch(3, 2)  # Catégorie (réduit)
+        header_layout.setColumnStretch(4, 1)  # Payé
+        header_layout.setColumnStretch(5, 1)  # Prêt
+        header_layout.setColumnStretch(6, 1)  # Actions
 
         main_layout.addLayout(header_layout)
 
@@ -157,8 +161,6 @@ class BudgetView(QMainWindow):
 
         group_box.setLayout(main_layout)
         return group_box
-
-    # Dans view.py, remplacez cette méthode
 
     def _create_summary_section(self) -> QGroupBox:
         """Crée la section récapitulative des totaux sur deux colonnes."""
@@ -271,12 +273,15 @@ class BudgetView(QMainWindow):
         """Ajoute une ligne de dépense à l'interface."""
         row_widget = QWidget()
         row_widget.depense_id = depense.id
-
         row_layout = QGridLayout(row_widget)
         row_layout.setContentsMargins(5, 2, 5, 2)
 
         nom_input = QLineEdit(depense.nom)
         montant_input = QLineEdit(str(depense.montant))
+        # --- MODIFICATION : Ajout du champ de saisie pour la date ---
+        date_input = QLineEdit(depense.date_depense)
+        date_input.setToolTip("Date au format JJ/MM/AAAA")
+
         cat_combo = QComboBox()
         cat_combo.addItems(self.controller.model.categories)
         cat_combo.setCurrentText(depense.categorie)
@@ -287,25 +292,29 @@ class BudgetView(QMainWindow):
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
 
+        # --- MODIFICATION : Ajout du widget date et décalage des colonnes ---
         row_layout.addWidget(nom_input, 0, 0)
         row_layout.addWidget(montant_input, 0, 1)
-        row_layout.addWidget(cat_combo, 0, 2)
-        row_layout.addWidget(effectue_check, 0, 3, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(emprunte_check, 0, 4, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(btn_supprimer_depense, 0, 5)
+        row_layout.addWidget(date_input, 0, 2) # Ajout de la date
+        row_layout.addWidget(cat_combo, 0, 3)  # Colonne décalée
+        row_layout.addWidget(effectue_check, 0, 4, Qt.AlignmentFlag.AlignCenter) # Colonne décalée
+        row_layout.addWidget(emprunte_check, 0, 5, Qt.AlignmentFlag.AlignCenter) # Colonne décalée
+        row_layout.addWidget(btn_supprimer_depense, 0, 6) # Colonne décalée
 
-        # --- MODIFICATION ---
-        # On applique EXACTEMENT les mêmes proportions aux colonnes de la ligne
+        # On applique les mêmes proportions aux colonnes de la ligne
         row_layout.setColumnStretch(0, 4)
         row_layout.setColumnStretch(1, 2)
-        row_layout.setColumnStretch(2, 3)
-        row_layout.setColumnStretch(3, 1)
+        row_layout.setColumnStretch(2, 2)
+        row_layout.setColumnStretch(3, 2)
         row_layout.setColumnStretch(4, 1)
         row_layout.setColumnStretch(5, 1)
+        row_layout.setColumnStretch(6, 1)
 
-        # Connexions (inchangées)
+        # Connexions
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        # --- MODIFICATION : Connexion du signal pour la date ---
+        date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
@@ -321,17 +330,18 @@ class BudgetView(QMainWindow):
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         """Récupère les données d'une ligne de dépense de l'UI."""
         if 0 <= index < len(self.expense_rows):
-            row_widget = self.expense_rows[index]
-            layout = row_widget.layout()
+            layout = self.expense_rows[index].layout()
             return {
-                "nom": layout.itemAt(0).widget().text(),
-                "montant_str": layout.itemAt(1).widget().text(),
-                "categorie": layout.itemAt(2).widget().currentText(),
-                "effectue": layout.itemAt(3).widget().isChecked(),
-                "emprunte": layout.itemAt(4).widget().isChecked(),
+                "nom": layout.itemAtPosition(0, 0).widget().text(),
+                "montant_str": layout.itemAtPosition(0, 1).widget().text(),
+                # --- MODIFICATION : Lecture de la valeur de la date ---
+                "date_depense": layout.itemAtPosition(0, 2).widget().text(),
+                "categorie": layout.itemAtPosition(0, 3).widget().currentText(),
+                "effectue": layout.itemAtPosition(0, 4).widget().isChecked(),
+                "emprunte": layout.itemAtPosition(0, 5).widget().isChecked(),
             }
         return {}
-
+    
     def update_mois_list(self, mois_list: List[str], selected_mois: str):
         self.mois_selector_combo.blockSignals(True)
         self.mois_selector_combo.clear()

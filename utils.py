@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Tuple, Any, Dict
-from datetime import datetime
+import datetime
 import logging
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
@@ -62,13 +62,20 @@ class ValidationResult:
 
 # ===== ENTITÉS DE DONNÉES =====
 @dataclass
+@dataclass
 class Depense:
-    nom: str = ""
+    """DTO pour une dépense ou une opération."""
+    # On ajoute des valeurs par défaut pour plus de flexibilité
+    id: Optional[int] = None
+    nom: str = ''
     montant: float = 0.0
-    categorie: str = "Autres"
+    categorie: str = 'Autres'
+    date_depense: str = ''
+    est_credit: bool = False
+    
     effectue: bool = False
     emprunte: bool = False
-    id: Optional[int] = None
+
 
 @dataclass
 class Mois:
@@ -179,6 +186,7 @@ class DatabaseManager:
                     )
                 ''')
                 
+                # --- MODIFICATION DE LA TABLE 'depenses' ---
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS depenses (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -186,6 +194,12 @@ class DatabaseManager:
                         nom TEXT NOT NULL DEFAULT '',
                         montant REAL NOT NULL DEFAULT 0.0,
                         categorie TEXT NOT NULL DEFAULT 'Autres',
+                        
+                        date_depense TEXT NOT NULL DEFAULT (strftime('%d/%m/%Y', 'now')),
+                        
+                        -- AJOUT : Champ pour indiquer si c'est un crédit ou un débit
+                        est_credit BOOLEAN NOT NULL DEFAULT 0, -- 0 = débit (dépense), 1 = crédit (revenu)
+                        
                         effectue BOOLEAN NOT NULL DEFAULT 0,
                         emprunte BOOLEAN NOT NULL DEFAULT 0,
                         FOREIGN KEY (mois_id) REFERENCES mois (id) ON DELETE CASCADE
@@ -303,59 +317,95 @@ class DatabaseManager:
             raise DatabaseError(f"Le nom '{new_name}' existe déjà.")
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors du renommage du mois: {e}")
-    
-    
+
     def get_depenses_by_mois(self, mois_id: int) -> List[Depense]:
-        """Récupère les dépenses d'un mois"""
+        """Récupère toutes les dépenses pour un mois donné."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT id, nom, montant, categorie, effectue, emprunte 
+                
+                # --- CORRECTION ---
+                # On ajoute 'date_depense' et 'est_credit' à la requête SELECT
+                sql = '''
+                    SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte 
                     FROM depenses WHERE mois_id = ?
-                ''', (mois_id,))
+                '''
+                
+                cursor.execute(sql, (mois_id,))
                 rows = cursor.fetchall()
-                return [
-                    Depense(
-                        nom=row[1], montant=row[2], categorie=row[3], 
-                        effectue=bool(row[4]), emprunte=bool(row[5]), id=row[0]
-                    )
-                    for row in rows
-                ]
+                
+                depenses = []
+                for row in rows:
+                    # On s'assure que les valeurs correspondent à l'ordre des colonnes
+                    depenses.append(Depense(
+                        id=row[0],
+                        nom=row[1],
+                        montant=row[2],
+                        categorie=row[3],
+                        date_depense=row[4],
+                        est_credit=bool(row[5]), # Conversion en booléen
+                        effectue=bool(row[6]),   # Conversion en booléen
+                        emprunte=bool(row[7])    # Conversion en booléen
+                    ))
+                return depenses
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération des dépenses: {e}")
-    
+        
     def create_depense(self, mois_id: int, depense: Depense) -> int:
-        """Crée une dépense et retourne son ID"""
+        """Crée une nouvelle dépense dans la base de données et retourne son ID."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO depenses (mois_id, nom, montant, categorie, effectue, emprunte)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (mois_id, depense.nom, depense.montant, depense.categorie, 
-                      depense.effectue, depense.emprunte))
-                depense_id = cursor.lastrowid
+                
+                # --- CORRECTION ---
+                # On ajoute les nouvelles colonnes à la requête SQL
+                sql = '''
+                    INSERT INTO depenses (
+                        mois_id, nom, montant, categorie, 
+                        date_depense, est_credit, effectue, emprunte
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                '''
+                
+                # On s'assure que les valeurs correspondent aux colonnes
+                values = (
+                    mois_id,
+                    depense.nom,
+                    depense.montant,
+                    depense.categorie,
+                    depense.date_depense,
+                    depense.est_credit,
+                    depense.effectue,
+                    depense.emprunte
+                )
+                
+                cursor.execute(sql, values)
                 conn.commit()
-                return depense_id
+                return cursor.lastrowid
         except sqlite3.Error as e:
-            raise DatabaseError(f"Erreur lors de la création de la dépense: {e}")
-    
+            raise DatabaseError(f"Erreur lors de la création de la dépense : {e}")
+ 
     def update_depense(self, depense: Depense):
-        """Met à jour une dépense"""
+        """Met à jour une dépense existante dans la base de données."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE depenses 
-                    SET nom = ?, montant = ?, categorie = ?, effectue = ?, emprunte = ?
+                # --- MODIFICATION : Ajout de date_depense à la requête UPDATE ---
+                sql = '''
+                    UPDATE depenses SET
+                        nom = ?, montant = ?, categorie = ?, date_depense = ?,
+                        effectue = ?, emprunte = ?, est_credit = ?
                     WHERE id = ?
-                ''', (depense.nom, depense.montant, depense.categorie, 
-                      depense.effectue, depense.emprunte, depense.id))
+                '''
+                values = (
+                    depense.nom, depense.montant, depense.categorie, depense.date_depense,
+                    depense.effectue, depense.emprunte, depense.est_credit,
+                    depense.id
+                )
+                cursor.execute(sql, values)
                 conn.commit()
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la mise à jour de la dépense: {e}")
-    
+            
     def delete_depense(self, depense_id: int):
         """Supprime une dépense"""
         try:
@@ -414,6 +464,43 @@ class DatabaseManager:
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération du mois par ID: {e}")
 
+    def duplicate_mois(self, original_mois_id: int, new_mois_name: str) -> Result:
+        """Crée une copie d'un mois existant avec toutes ses opérations."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                # Étape 1 : Récupérer les détails du mois original
+                original_mois = self.get_mois_by_id(original_mois_id)
+                if not original_mois:
+                    return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
+
+                # Étape 2 : Créer le nouveau mois avec le même salaire
+                # La méthode create_mois gère déjà le cas où le nom existerait
+                new_mois_id = self.create_mois(new_mois_name, original_mois.salaire)
+
+                # Étape 3 : Récupérer toutes les opérations du mois original
+                original_depenses = self.get_depenses_by_mois(original_mois_id)
+
+                # Étape 4 : Insérer des copies de ces opérations pour le nouveau mois
+                for depense in original_depenses:
+                    new_depense = Depense(
+                        nom=depense.nom,
+                        montant=depense.montant,
+                        categorie=depense.categorie,
+                        date_depense=depense.date_depense,
+                        est_credit=depense.est_credit,
+                        effectue=depense.effectue,
+                        emprunte=depense.emprunte
+                    )
+                    self.create_depense(new_mois_id, new_depense)
+                
+                conn.commit()
+                return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
+
+        except Exception as e:
+            # Lève une exception personnalisée qui sera attrapée par le modèle
+            raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
 
 # ===== SERVICE IMPORT/EXPORT =====
 class ImportExportService:
@@ -491,69 +578,91 @@ class ImportExportService:
             logger.error(f"Erreur inattendue lors de l'import JSON: {e}")
             return Result.error(f"Une erreur inattendue est survenue: {e}")
 
-        
+    # Dans utils.py, remplacez cette méthode dans la classe ImportExportService
+
     def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
         """
-        Lit un fichier Excel, crée un nouveau mois et y importe les dépenses.
+        Lit un fichier Excel, crée un nouveau mois et y importe les opérations.
+        Les crédits sont sommés et définissent le salaire initial du mois.
         """
         try:
-            # 1. Analyser le fichier Excel pour extraire les dépenses
             workbook = openpyxl.load_workbook(filepath, read_only=True)
             sheet: Worksheet = workbook.active
             
+            # (La logique de recherche des en-têtes reste la même)
             header_row_index = -1
             col_indices = {}
-
-            # Recherche de la ligne d'en-tête à partir de la ligne 10
             for i in range(10, sheet.max_row + 1):
                 row_values = [str(cell.value).strip() if cell.value else "" for cell in sheet[i]]
-                if "Libellé" in row_values and "Débit euros" in row_values:
+                if "Libellé" in row_values and "Date" in row_values:
                     header_row_index = i
-                    libelle_index = row_values.index("Libellé")
-                    debit_index = row_values.index("Débit euros")
-                    col_indices = {"nom": libelle_index, "montant": debit_index}
+                    col_indices["nom"] = row_values.index("Libellé")
+                    col_indices["date"] = row_values.index("Date")
+                    if "Débit euros" in row_values:
+                        col_indices["debit"] = row_values.index("Débit euros")
+                    if "Crédit euros" in row_values:
+                        col_indices["credit"] = row_values.index("Crédit euros")
                     break
             
             if header_row_index == -1:
-                return Result.error("En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et 'Débit euros' existent à partir de la ligne 10.")
+                return Result.error("En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et 'Date' existent.")
 
-            depenses_a_importer: List[Depense] = []
-            # 2. Lire les lignes de dépenses
+            operations_a_importer: List[Depense] = []
+            
+            # On lit toutes les lignes et on les stocke en mémoire
             for i in range(header_row_index + 1, sheet.max_row + 1):
                 nom = sheet.cell(row=i, column=col_indices["nom"] + 1).value
-                montant_brut = sheet.cell(row=i, column=col_indices["montant"] + 1).value
+                date_val = sheet.cell(row=i, column=col_indices["date"] + 1).value
+                debit_val = sheet.cell(row=i, column=col_indices.get("debit", -1) + 1).value
+                credit_val = sheet.cell(row=i, column=col_indices.get("credit", -1) + 1).value
 
-                if nom and montant_brut:
-                    try:
-                        montant = float(montant_brut)
-                        if montant > 0:
-                            depenses_a_importer.append(
-                                Depense(nom=str(nom).strip(), montant=montant)
-                            )
-                    except (ValueError, TypeError):
-                        # Ignorer les lignes où le montant n'est pas un nombre valide
-                        logger.warning(f"Ligne {i} ignorée: montant invalide ('{montant_brut}')")
+                if not nom or not date_val:
+                    continue
+
+                date_depense_str = ""
+                if isinstance(date_val, datetime.datetime):
+                    date_depense_str = date_val.strftime('%d/%m/%Y')
+                else:
+                    date_depense_str = str(date_val)
+
+                montant, est_credit = 0.0, False
+                try:
+                    if "credit" in col_indices and credit_val and float(credit_val) > 0:
+                        montant, est_credit = float(credit_val), True
+                    elif "debit" in col_indices and debit_val and float(debit_val) > 0:
+                        montant, est_credit = float(debit_val), False
+                    else:
                         continue
+                except (ValueError, TypeError):
+                    logger.warning(f"Ligne {i} ignorée: montant invalide.")
+                    continue
+                
+                operations_a_importer.append(
+                    Depense(nom=str(nom).strip(), montant=montant, date_depense=date_depense_str, est_credit=est_credit)
+                )
             
-            # 3. Créer le nouveau mois dans la base de données
+            # --- MODIFICATION ---
+            # 1. On calcule le total des crédits qui servira de salaire initial
+            salaire_initial = sum(op.montant for op in operations_a_importer if op.est_credit)
+
+            # 2. On crée le mois avec ce salaire
             try:
-                # Salaire par défaut à 0 pour le mois importé
-                new_mois_id = self.db_manager.create_mois(new_mois_name, 0.0)
+                new_mois_id = self.db_manager.create_mois(new_mois_name, salaire_initial)
             except DatabaseError as e:
-                return Result.error(str(e)) # Ex: Le mois existe déjà
+                return Result.error(str(e))
 
-            # 4. Insérer toutes les dépenses lues
-            for depense in depenses_a_importer:
-                self.db_manager.create_depense(new_mois_id, depense)
+            # 3. On insère toutes les opérations (crédits et débits) dans la table
+            for op in operations_a_importer:
+                self.db_manager.create_depense(new_mois_id, op)
 
-            return Result.success(f"{len(depenses_a_importer)} dépenses importées dans le nouveau mois '{new_mois_name}'.")
+            return Result.success(f"{len(operations_a_importer)} opérations importées dans '{new_mois_name}'.")
 
         except FileNotFoundError:
             return Result.error("Fichier Excel non trouvé.")
         except Exception as e:
             logger.error(f"Erreur inattendue lors de l'import Excel: {e}")
             return Result.error(f"Une erreur inattendue est survenue: {e}")
-
+                
 # ===== PATTERN OBSERVER =====
 class Observable:
     """Classe de base pour les objets observables"""
