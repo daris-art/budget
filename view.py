@@ -114,54 +114,136 @@ class BudgetView(QMainWindow):
         group_box.setLayout(layout)
         return group_box
 
+    # Dans view.py, remplacez ces trois méthodes
+
     def _create_expenses_section(self) -> QGroupBox:
         """Crée la section des dépenses avec la liste scrollable."""
         group_box = QGroupBox("Dépenses")
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()
-        # --- MODIFICATION : Ajout de "Date" à l'en-tête ---
-        headers = ["Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Actions"]
+        # --- MODIFICATION : Ajout d'une colonne vide pour l'émoji ---
+        headers = ["Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
             
-            if header == "Nom":
-                label.setIndent(5)
+            if header in ("Nom", "Type"):
+                label.setIndent(10)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            elif header in ("Payé", "Prêt", "Actions"):
+            elif header == "Actions":
                 alignment = Qt.AlignmentFlag.AlignCenter
+            elif header in ("Payé", "Prêt"):
+                alignment = Qt.AlignmentFlag.AlignLeft
             else:
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             
             header_layout.addWidget(label, 0, i, alignment)
         
         # --- MODIFICATION : Ajustement des proportions des colonnes ---
-        header_layout.setColumnStretch(0, 4)  # Nom
-        header_layout.setColumnStretch(1, 2)  # Montant
-        header_layout.setColumnStretch(2, 2)  # Date (nouveau)
-        header_layout.setColumnStretch(3, 2)  # Catégorie (réduit)
-        header_layout.setColumnStretch(4, 1)  # Payé
-        header_layout.setColumnStretch(5, 1)  # Prêt
-        header_layout.setColumnStretch(6, 1)  # Actions
-
+        # On ajuste les proportions pour rendre la première colonne la plus petite possible.
+        header_layout.setColumnStretch(0, 0)  # Type (facteur 0 pour une largeur minimale)
+        header_layout.setColumnStretch(1, 6)  # Nom
+        header_layout.setColumnStretch(2, 2)  # Montant
+        header_layout.setColumnStretch(3, 2)  # Date
+        header_layout.setColumnStretch(4, 3)  # Catégorie
+        header_layout.setColumnStretch(5, 1)  # Payé
+        header_layout.setColumnStretch(6, 1)  # Prêt
+        header_layout.setColumnStretch(7, 1)  # Actions
         main_layout.addLayout(header_layout)
 
+        # ... Le reste de la méthode reste identique ...
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         self.expenses_container = QWidget()
         self.expenses_layout = QVBoxLayout(self.expenses_container)
-        self.expenses_layout.setSpacing(2) 
+        self.expenses_layout.setSpacing(2)
         self.expenses_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(scroll_area)
-        
         btn_add_expense = QPushButton("➕ Ajouter une dépense")
         btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         main_layout.addWidget(btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
-
         group_box.setLayout(main_layout)
         return group_box
 
+    def add_expense_widget(self, depense: Any, index: int):
+        """Ajoute une ligne de dépense à l'interface."""
+        row_widget = QWidget()
+        row_widget.depense_id = depense.id
+        row_layout = QGridLayout(row_widget)
+        row_layout.setContentsMargins(5, 2, 5, 2)
+
+        # --- MODIFICATION : Création du label pour l'émoji ---
+        emoji_label = QLabel("🟢" if depense.est_credit else "🔴")
+        emoji_label.setToolTip("Revenu" if depense.est_credit else "Dépense")
+
+        # Création des autres widgets (inchangé)
+        nom_input = QLineEdit(depense.nom)
+        montant_input = QLineEdit(str(depense.montant))
+        date_input = QLineEdit(depense.date_depense)
+        date_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cat_combo = QComboBox()
+        cat_combo.addItems(self.controller.model.categories)
+        cat_combo.setCurrentText(depense.categorie)
+        effectue_check = QCheckBox()
+        effectue_check.setChecked(depense.effectue)
+        emprunte_check = QCheckBox()
+        emprunte_check.setChecked(depense.emprunte)
+        btn_supprimer_depense = QPushButton("➖")
+        btn_supprimer_depense.setObjectName("RedButton")
+
+        # --- MODIFICATION : Ajout du widget émoji et décalage des colonnes ---
+        row_layout.addWidget(emoji_label, 0, 0, Qt.AlignmentFlag.AlignCenter) # Colonne 0
+        row_layout.addWidget(nom_input, 0, 1)                                # Colonne 1
+        row_layout.addWidget(montant_input, 0, 2)                             # Colonne 2
+        row_layout.addWidget(date_input, 0, 3)                                # Colonne 3
+        row_layout.addWidget(cat_combo, 0, 4)                                 # Colonne 4
+        row_layout.addWidget(effectue_check, 0, 5, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(emprunte_check, 0, 6, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(btn_supprimer_depense, 0, 7)
+
+        # --- MODIFICATION ---
+        # On applique EXACTEMENT les mêmes proportions ici.
+        row_layout.setColumnStretch(0, 0)  # Type (facteur 0)
+        row_layout.setColumnStretch(1, 6)
+        row_layout.setColumnStretch(2, 2)
+        row_layout.setColumnStretch(3, 2)
+        row_layout.setColumnStretch(4, 3)
+        row_layout.setColumnStretch(5, 1)
+        row_layout.setColumnStretch(6, 1)
+        row_layout.setColumnStretch(7, 1)
+
+        # Connexions (inchangées, les indices des lambdas sont corrects)
+        nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
+        montant_input.textChanged.connect(self.controller.handle_live_update)
+        effectue_check.stateChanged.connect(self.controller.handle_live_update)
+        emprunte_check.stateChanged.connect(self.controller.handle_live_update)
+
+        self.expenses_layout.addWidget(row_widget)
+        self.expense_rows.append(row_widget)
+    
+    def get_expense_data(self, index: int) -> Dict[str, Any]:
+        """Récupère les données d'une ligne de dépense de l'UI."""
+        if 0 <= index < len(self.expense_rows):
+            layout = self.expense_rows[index].layout()
+            # --- MODIFICATION : Ajustement des indices de colonne ---
+            # L'émoji est en colonne 0, donc le nom est en 1, le montant en 2, etc.
+            return {
+                "nom": layout.itemAtPosition(0, 1).widget().text(),
+                "montant_str": layout.itemAtPosition(0, 2).widget().text(),
+                "date_depense": layout.itemAtPosition(0, 3).widget().text(),
+                "categorie": layout.itemAtPosition(0, 4).widget().currentText(),
+                "effectue": layout.itemAtPosition(0, 5).widget().isChecked(),
+                "emprunte": layout.itemAtPosition(0, 6).widget().isChecked(),
+            }
+        return {}
+    
     def _create_summary_section(self) -> QGroupBox:
         """Crée la section récapitulative des totaux sur deux colonnes."""
         group_box = QGroupBox("Récapitulatif")
@@ -267,81 +349,7 @@ class BudgetView(QMainWindow):
         app = QApplication.instance()
         if app:
             app.setStyleSheet(final_stylesheet)
-    
-
-    def add_expense_widget(self, depense: Any, index: int):
-        """Ajoute une ligne de dépense à l'interface."""
-        row_widget = QWidget()
-        row_widget.depense_id = depense.id
-        row_layout = QGridLayout(row_widget)
-        row_layout.setContentsMargins(5, 2, 5, 2)
-
-        nom_input = QLineEdit(depense.nom)
-        montant_input = QLineEdit(str(depense.montant))
-        # --- MODIFICATION : Ajout du champ de saisie pour la date ---
-        date_input = QLineEdit(depense.date_depense)
-        date_input.setToolTip("Date au format JJ/MM/AAAA")
-
-        cat_combo = QComboBox()
-        cat_combo.addItems(self.controller.model.categories)
-        cat_combo.setCurrentText(depense.categorie)
-        effectue_check = QCheckBox()
-        effectue_check.setChecked(depense.effectue)
-        emprunte_check = QCheckBox()
-        emprunte_check.setChecked(depense.emprunte)
-        btn_supprimer_depense = QPushButton("➖")
-        btn_supprimer_depense.setObjectName("RedButton")
-
-        # --- MODIFICATION : Ajout du widget date et décalage des colonnes ---
-        row_layout.addWidget(nom_input, 0, 0)
-        row_layout.addWidget(montant_input, 0, 1)
-        row_layout.addWidget(date_input, 0, 2) # Ajout de la date
-        row_layout.addWidget(cat_combo, 0, 3)  # Colonne décalée
-        row_layout.addWidget(effectue_check, 0, 4, Qt.AlignmentFlag.AlignCenter) # Colonne décalée
-        row_layout.addWidget(emprunte_check, 0, 5, Qt.AlignmentFlag.AlignCenter) # Colonne décalée
-        row_layout.addWidget(btn_supprimer_depense, 0, 6) # Colonne décalée
-
-        # On applique les mêmes proportions aux colonnes de la ligne
-        row_layout.setColumnStretch(0, 4)
-        row_layout.setColumnStretch(1, 2)
-        row_layout.setColumnStretch(2, 2)
-        row_layout.setColumnStretch(3, 2)
-        row_layout.setColumnStretch(4, 1)
-        row_layout.setColumnStretch(5, 1)
-        row_layout.setColumnStretch(6, 1)
-
-        # Connexions
-        nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        # --- MODIFICATION : Connexion du signal pour la date ---
-        date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
-
-        montant_input.textChanged.connect(self.controller.handle_live_update)
-        effectue_check.stateChanged.connect(self.controller.handle_live_update)
-        emprunte_check.stateChanged.connect(self.controller.handle_live_update)
-
-        self.expenses_layout.addWidget(row_widget)
-        self.expense_rows.append(row_widget)
-
-    def get_expense_data(self, index: int) -> Dict[str, Any]:
-        """Récupère les données d'une ligne de dépense de l'UI."""
-        if 0 <= index < len(self.expense_rows):
-            layout = self.expense_rows[index].layout()
-            return {
-                "nom": layout.itemAtPosition(0, 0).widget().text(),
-                "montant_str": layout.itemAtPosition(0, 1).widget().text(),
-                # --- MODIFICATION : Lecture de la valeur de la date ---
-                "date_depense": layout.itemAtPosition(0, 2).widget().text(),
-                "categorie": layout.itemAtPosition(0, 3).widget().currentText(),
-                "effectue": layout.itemAtPosition(0, 4).widget().isChecked(),
-                "emprunte": layout.itemAtPosition(0, 5).widget().isChecked(),
-            }
-        return {}
-    
+        
     def update_mois_list(self, mois_list: List[str], selected_mois: str):
         self.mois_selector_combo.blockSignals(True)
         self.mois_selector_combo.clear()
