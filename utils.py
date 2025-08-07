@@ -9,6 +9,7 @@ from datetime import datetime
 import logging
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
+from dataclasses import dataclass, asdict
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -399,6 +400,20 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.warning(f"Erreur lors de la récupération de config: {e}")
             return None
+        
+    def get_mois_by_id(self, mois_id: int) -> Optional[Mois]:
+        """Récupère les détails d'un mois par son ID."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (mois_id,))
+                row = cursor.fetchone()
+                if row:
+                    return Mois(id=row[0], nom=row[1], salaire=row[2])
+                return None
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Erreur lors de la récupération du mois par ID: {e}")
+
 
 # ===== SERVICE IMPORT/EXPORT =====
 class ImportExportService:
@@ -407,78 +422,75 @@ class ImportExportService:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
     
-    def export_mois_to_json(self, mois: Mois, depenses: List[Depense], filepath: Path) -> Result:
-        """Exporte un mois vers JSON"""
+    def export_to_json(self, mois_id: int, filepath: Path) -> Result:
+        """Exporte les données d'un mois (salaire et dépenses) vers un fichier JSON."""
         try:
-            data = {
-                'mois': {
-                    'nom': mois.nom,
-                    'salaire': mois.salaire,
-                    'date_creation': mois.date_creation
-                },
-                'depenses': [
-                    {
-                        'nom': d.nom,
-                        'montant': d.montant,
-                        'categorie': d.categorie,
-                        'effectue': d.effectue,
-                        'emprunte': d.emprunte
-                    }
-                    for d in depenses
-                ]
-            }
+            mois_details = self.db_manager.get_mois_by_id(mois_id)
+            if not mois_details:
+                return Result.error("Mois non trouvé pour l'export.")
             
+            depenses = self.db_manager.get_depenses_by_mois(mois_id)
+            
+            # --- CORRECTION ---
+            # On utilise asdict(dep) pour les dataclasses au lieu de dep._asdict()
+            depenses_data = [asdict(dep) for dep in depenses]
+            
+            # Structure des données pour le fichier JSON
+            data_to_export = {
+                "mois": {
+                    "nom": mois_details.nom,
+                    "salaire": mois_details.salaire
+                },
+                "depenses": depenses_data
+            }
+
             with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
+                json.dump(data_to_export, f, indent=4, ensure_ascii=False)
             
             return Result.success(f"Export réussi vers {filepath.name}")
-            
-        except (IOError, json.JSONEncodeError) as e:
-            logger.error(f"Erreur d'export: {e}")
-            return Result.error(f"Erreur d'export: {e}")
+
         except Exception as e:
-            logger.error(f"Erreur inattendue lors de l'export: {e}")
-            return Result.error("Erreur inattendue lors de l'export")
-    
-    def import_from_json(self, filepath: Path, mois_id: int) -> Result:
-        """Importe des données JSON vers un mois existant"""
+            logger.error(f"Erreur inattendue lors de l'export JSON: {e}")
+            return Result.error(f"Une erreur inattendue est survenue: {e}")
+
+    def import_from_json(self, filepath: Path, new_mois_name: str) -> Result:
+        """Importe un fichier JSON pour créer un nouveau mois et ses dépenses."""
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
-            # Validation de la structure
+
             if 'depenses' not in data:
-                return Result.error("Structure JSON invalide: 'depenses' manquant")
+                return Result.error("Structure JSON invalide : clé 'depenses' manquante.")
+
+            salaire = data.get('mois', {}).get('salaire', 0.0)
+
+            new_mois_id = self.db_manager.create_mois(new_mois_name, salaire)
             
-            # Suppression des dépenses existantes
-            self.db_manager.delete_all_depenses_by_mois(mois_id)
-            
-            # Import du salaire si présent
             imported_count = 0
-            if 'mois' in data and 'salaire' in data['mois']:
-                self.db_manager.update_mois_salaire(mois_id, data['mois']['salaire'])
-            
-            # Import des dépenses
             for dep_data in data['depenses']:
                 depense = Depense(
-                    nom=dep_data.get('nom', ''),
+                    id=None,
+                    nom=dep_data.get('nom', 'Dépense sans nom'),
                     montant=dep_data.get('montant', 0.0),
                     categorie=dep_data.get('categorie', 'Autres'),
                     effectue=dep_data.get('effectue', False),
                     emprunte=dep_data.get('emprunte', False)
                 )
-                self.db_manager.create_depense(mois_id, depense)
+                self.db_manager.create_depense(new_mois_id, depense)
                 imported_count += 1
             
-            return Result.success(f"Import réussi: {imported_count} dépenses importées")
-            
+            return Result.success(f"Import réussi: {imported_count} dépenses ajoutées à '{new_mois_name}'.")
+
         except FileNotFoundError:
-            return Result.error("Fichier non trouvé")
+            return Result.error("Fichier non trouvé.")
         except json.JSONDecodeError as e:
-            return Result.error(f"Fichier JSON invalide: {e}")
+            return Result.error(f"Erreur de décodage JSON : {e}")
+        except DatabaseError as e:
+            return Result.error(str(e))
         except Exception as e:
-            logger.error(f"Erreur inattendue lors de l'import: {e}")
-            return Result.error("Erreur inattendue lors de l'import")
+            logger.error(f"Erreur inattendue lors de l'import JSON: {e}")
+            return Result.error(f"Une erreur inattendue est survenue: {e}")
+
         
     def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
         """

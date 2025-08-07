@@ -106,7 +106,7 @@ class BudgetController:
             return
 
         original_name = self.model.mois_actuel.nom
-        new_name = self.view.ask_for_string("Renommer le mois", "Entrez le nouveau nom :", original_name)
+        new_name = self.view.ask_for_string("Renommer le mois", "Entrez le nouveau nom du mois :", original_name)
         if new_name and new_name.strip() != original_name:
             result = self.model.rename_mois(new_name)
             self._handle_result(result)
@@ -196,28 +196,23 @@ class BudgetController:
             self.view.show_error_message("Erreur lors de l'export")
 
     def handle_import_from_json(self):
-        """Gère l'import depuis JSON"""
-        try:
-            if not self.model.mois_actuel:
-                self.view.show_warning_message("Veuillez d'abord créer ou charger un mois.")
-                return
+        """Gère l'import depuis JSON en créant un nouveau mois."""
+        filepath = self.view.get_import_filepath()
+        if not filepath:
+            return
 
-            filepath = self.view.get_import_filepath()
-            if not filepath:
-                return
-
-            if not self.view.ask_confirmation(
-                "Confirmation",
-                "L'import remplacera toutes les dépenses actuelles. Continuer ?"
-            ):
-                return
-
-            result = self.model.import_from_json(filepath)
-            self._handle_result(result)
-
-        except Exception as e:
-            logger.error(f"Erreur lors de l'import: {e}")
-            self.view.show_error_message("Erreur lors de l'import")
+        # Propose un nom par défaut et demande à l'utilisateur de confirmer/modifier
+        default_name = f"Import {filepath.stem} {datetime.now().strftime('%B %Y')}"
+        new_name = self.view.ask_for_string("Importer un nouveau mois",
+                                            "Entrez le nom pour ce nouveau mois importé :",
+                                            default_name)
+        if not new_name:
+            return
+        
+        # On lance l'import dans le modèle
+        result = self.model.import_from_json(filepath, new_name)
+        # Si l'import réussit, le modèle notifiera la vue qui se mettra à jour.
+        self._handle_result(result)
 
     def handle_import_from_excel(self):
         """Gère l'import depuis un fichier Excel."""

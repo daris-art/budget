@@ -9,7 +9,7 @@ import qdarktheme
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea, QMessageBox,
-    QInputDialog, QFileDialog, QGroupBox
+    QInputDialog, QFileDialog, QGroupBox, QFrame
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -158,13 +158,19 @@ class BudgetView(QMainWindow):
         group_box.setLayout(main_layout)
         return group_box
 
-    def _create_summary_section(self) -> QGroupBox:
-        """Crée la section récapitulative des totaux."""
-        group_box = QGroupBox("Récapitulatif")
-        layout = QGridLayout()
+    # Dans view.py, remplacez cette méthode
 
-        # --- MODIFICATION ---
-        # On ajoute "nombre_depenses" à la liste des éléments à afficher
+    def _create_summary_section(self) -> QGroupBox:
+        """Crée la section récapitulative des totaux sur deux colonnes."""
+        group_box = QGroupBox("Récapitulatif")
+        
+        # Le layout principal sera horizontal pour contenir nos deux colonnes
+        main_layout = QHBoxLayout()
+
+        # On crée un layout de formulaire pour chaque colonne
+        left_form_layout = QFormLayout()
+        right_form_layout = QFormLayout()
+
         summary_items = {
             "nombre_depenses": "Nombre de Dépenses:",
             "total_depenses": "Total des Dépenses:",
@@ -173,21 +179,46 @@ class BudgetView(QMainWindow):
             "total_non_effectue": "Dépenses Prévues:",
             "total_emprunte": "Total des Prêts:"
         }
-
-        for i, (key, text) in enumerate(summary_items.items()):
+        
+        # On convertit les items en liste pour pouvoir les diviser
+        items = list(summary_items.items())
+        
+        # On calcule le point de division pour avoir deux colonnes équilibrées
+        mid_point = (len(items) + 1) // 2
+        
+        # On remplit la colonne de gauche
+        for key, text in items[:mid_point]:
             label = QLabel(text)
-            value_label = QLabel("0") # Valeur par défaut pour le nombre
-            if key != "nombre_depenses":
-                value_label.setText("0.00 €") # Valeur pour les montants
-
+            value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            
             self.summary_labels[key] = value_label
-            layout.addWidget(label, i, 0)
-            layout.addWidget(value_label, i, 1)
+            left_form_layout.addRow(label, value_label)
+            
+        # On remplit la colonne de droite
+        for key, text in items[mid_point:]:
+            label = QLabel(text)
+            value_label = QLabel("0.00 €")
+            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
 
-        group_box.setLayout(layout)
+            self.summary_labels[key] = value_label
+            right_form_layout.addRow(label, value_label)
+
+        # On ajoute nos deux colonnes (form layouts) au layout principal
+        main_layout.addLayout(left_form_layout)
+        # On ajoute un séparateur vertical pour un meilleur visuel
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator)
+        main_layout.addLayout(right_form_layout)
+        
+        # On ajoute de l'espace flexible pour que les colonnes ne s'étirent pas trop
+        main_layout.addStretch()
+
+        group_box.setLayout(main_layout)
         return group_box
-    
+        
     def _create_status_bar(self):
         """Crée la barre de statut."""
         self.status_bar = self.statusBar()

@@ -473,30 +473,32 @@ class BudgetModel(Observable):
     
     # ===== IMPORT/EXPORT =====
     def export_to_json(self, filepath: Path) -> Result:
+        """Orchestre l'export du mois actuel vers un fichier JSON."""
         if not self.mois_actuel:
-            return Result.error("Aucun mois chargé à exporter")
+            return Result.error("Aucun mois n'est chargé pour l'export.")
         
-        return self._import_export_service.export_mois_to_json(
-            self.mois_actuel, self._depenses, filepath
-        )
-    
-    def import_from_json(self, filepath: Path) -> Result:
-        if not self.mois_actuel:
-            return Result.error("Aucun mois chargé pour l'import")
+        # S'assure qu'un nom de fichier a une extension .json
+        if not filepath.name.endswith('.json'):
+            filepath = filepath.with_suffix('.json')
+            
+        return self._import_export_service.export_to_json(self.mois_actuel.id, filepath)
+
+    def import_from_json(self, filepath: Path, new_mois_name: str) -> Result:
+        """Orchestre l'import d'un fichier JSON comme un nouveau mois."""
+        if not new_mois_name or not new_mois_name.strip():
+            return Result.error("Le nom du nouveau mois ne peut pas être vide.")
+
+        result = self._import_export_service.import_from_json(filepath, new_mois_name.strip())
         
-        try:
-            result = self._import_export_service.import_from_json(filepath, self.mois_actuel.id)
-            
-            if result.is_success:
-                self._reload_current_mois_data()
-                self.notify_observers('data_imported', filepath)
-            
-            return result
-            
-        except Exception as e:
-            logger.critical(f"Erreur inattendue lors import: {e}")
-            return Result.error("Une erreur inattendue s'est produite lors de l'import")
-    
+        # --- CORRECTION ---
+        if result.is_success:
+            # Si l'import réussit, on charge ce nouveau mois pour l'afficher.
+            # La méthode load_mois s'occupe déjà d'envoyer la bonne notification
+            # à la vue pour qu'elle se mette à jour complètement.
+            self.load_mois(new_mois_name.strip())
+        
+        return result
+        
     # ===== MÉTHODES DE SESSION =====
     def load_data_from_last_session(self) -> Result:
         try:
