@@ -110,7 +110,28 @@ class BudgetView(QMainWindow):
         headers = ["Nom", "Montant (€)", "Catégorie", "Payé", "Prêt", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
-            header_layout.addWidget(label, 0, i, Qt.AlignmentFlag.AlignCenter)
+            if header == "Nom":
+                # Ajoute une marge intérieure de 5 pixels à gauche du texte.
+                label.setIndent(15)
+                # On le garde aligné à gauche
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            elif header in ("Payé", "Prêt"):
+                label.setProperty("cssClass", "shiftedHeader")
+                alignment = Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+            else:
+                # Pour tous les autres titres, on garde l'alignement à gauche
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            header_layout.addWidget(label, 0, i, alignment)
+
+        # On définit les proportions des colonnes pour l'en-tête.
+        # La colonne "Nom" (0) prendra plus de place.
+        header_layout.setColumnStretch(0, 4)  # Nom
+        header_layout.setColumnStretch(1, 2)  # Montant
+        header_layout.setColumnStretch(2, 3)  # Catégorie
+        header_layout.setColumnStretch(3, 1)  # Payé
+        header_layout.setColumnStretch(4, 1)  # Prêt
+        header_layout.setColumnStretch(5, 1)  # Actions
+
         main_layout.addLayout(header_layout)
 
         scroll_area = QScrollArea()
@@ -122,14 +143,12 @@ class BudgetView(QMainWindow):
         scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(scroll_area)
         
-        # Bouton d'action pour ajouter une dépense en bas
         btn_add_expense = QPushButton("➕ Ajouter une dépense")
         btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         main_layout.addWidget(btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
 
         group_box.setLayout(main_layout)
         return group_box
-
 
     def _create_summary_section(self) -> QGroupBox:
         """Crée la section récapitulative des totaux."""
@@ -171,7 +190,9 @@ class BudgetView(QMainWindow):
         if not hasattr(self, 'btn_toggle_theme'): return
         self.btn_toggle_theme.setText("☀️" if theme == 'dark' else "🌙")
 
+        # Couleurs personnalisées pour les boutons, adaptées au thème
         custom_styles = ""
+        
         if theme == 'dark':
             custom_styles = """
                 QPushButton#RedButton { background-color: #582A2A; border: 1px solid #8B4545; }
@@ -192,6 +213,14 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValueNegative"] { color: #DC2626; }
                 QLabel[cssClass="summaryValuePositive"] { color: #16A34A; }
             """
+
+        # On ajoute la règle de style pour nos en-têtes décalés
+        # Cette règle est indépendante du thème clair/sombre
+        custom_styles += """
+            QLabel[cssClass="shiftedHeader"] {
+                padding-right: 25px; /* Pousse le texte de 15px vers la gauche */
+            }
+        """
         
         final_stylesheet = qdarktheme.load_stylesheet(theme) + custom_styles
         app = QApplication.instance()
@@ -202,7 +231,6 @@ class BudgetView(QMainWindow):
     def add_expense_widget(self, depense: Any, index: int):
         """Ajoute une ligne de dépense à l'interface."""
         row_widget = QWidget()
-        # --- CORRECTION 2 : On stocke l'ID de la dépense dans le widget de la ligne ---
         row_widget.depense_id = depense.id
 
         row_layout = QGridLayout(row_widget)
@@ -227,26 +255,30 @@ class BudgetView(QMainWindow):
         row_layout.addWidget(emprunte_check, 0, 4, Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(btn_supprimer_depense, 0, 5)
 
-        # Connexions pour la sauvegarde
+        # --- MODIFICATION ---
+        # On applique EXACTEMENT les mêmes proportions aux colonnes de la ligne
+        row_layout.setColumnStretch(0, 4)
+        row_layout.setColumnStretch(1, 2)
+        row_layout.setColumnStretch(2, 3)
+        row_layout.setColumnStretch(3, 1)
+        row_layout.setColumnStretch(4, 1)
+        row_layout.setColumnStretch(5, 1)
+
+        # Connexions (inchangées)
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        
-        # --- CORRECTION 2 : Le bouton de suppression appelle le contrôleur avec l'ID ---
-        btn_supprimer_depense.clicked.connect(
-            lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id)
-        )
+        btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
 
-        # Connexions pour la mise à jour en direct du résumé
         montant_input.textChanged.connect(self.controller.handle_live_update)
         effectue_check.stateChanged.connect(self.controller.handle_live_update)
         emprunte_check.stateChanged.connect(self.controller.handle_live_update)
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
-    
+
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         """Récupère les données d'une ligne de dépense de l'UI."""
         if 0 <= index < len(self.expense_rows):
@@ -309,6 +341,7 @@ class BudgetView(QMainWindow):
         for i, depense in enumerate(display_data.depenses):
             self.add_expense_widget(depense, i)
         summary = {
+            "nombre_depenses": display_data.nombre_depenses,
             "total_depenses": display_data.total_depenses,
             "argent_restant": display_data.argent_restant,
             "total_effectue": display_data.total_effectue,
@@ -352,3 +385,33 @@ class BudgetView(QMainWindow):
         self.clear_all_expenses()
         self.update_status_bar(message, duration=0)
         QApplication.processEvents()
+
+    def get_excel_import_filepath(self) -> Optional[Path]:
+        """Ouvre une boîte de dialogue pour sélectionner un fichier Excel (.xlsx)."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importer depuis Excel",
+            "",
+            "Fichiers Excel (*.xlsx);;Tous les fichiers (*.*)"
+        )
+        return Path(filepath) if filepath else None
+
+    def get_import_filepath(self) -> Optional[Path]:
+        """Ouvre une boîte de dialogue pour sélectionner un fichier JSON à importer."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importer depuis JSON",
+            "",
+            "Fichiers JSON (*.json);;Tous les fichiers (*.*)"
+        )
+        return Path(filepath) if filepath else None
+
+    def get_export_filepath(self) -> Optional[Path]:
+        """Ouvre une boîte dedialogue pour sauvegarder un fichier JSON."""
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exporter vers JSON",
+            "",
+            "Fichiers JSON (*.json);;Tous les fichiers (*.*)"
+        )
+        return Path(filepath) if filepath else None
