@@ -1,56 +1,96 @@
-# model.py - Modèle amélioré avec architecture MVC stricte
+# model.py (version mise à jour)
 
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
 import logging
+from typing import List, Optional, Dict, Any, Tuple
 
 from utils import (
-    Observable, Result, ValidationResult, DatabaseManager, DataValidator, 
-    ImportExportService, Depense, Mois, MoisDisplayData, 
-    DatabaseError, ValidationError, BudgetAppError
+    DatabaseManager, DataValidator, ImportExportService, Result,
+    Depense, Mois, MoisDisplayData, Observable, DatabaseError
 )
 
 logger = logging.getLogger(__name__)
 
 class BudgetModel(Observable):
     """
-    Modèle principal de l'application - Responsable uniquement de la logique métier
+    Responsable uniquement de la logique métier de l'application de budget.
     """
-    
     def __init__(self):
         super().__init__()
-        
-        # Configuration
-        self.categories = [
-            "Alimentation", "Logement", "Transport", "Loisirs",
-            "Santé", "Factures", "Shopping", "Épargne", "Autres"
-        ]
-        
-        # État actuel
-        self.mois_actuel: Optional[Mois] = None
-        self._depenses: List[Depense] = []
-        
-        # Services initialisés à None
+        # On utilise expanduser() pour résoudre le '~' et trouver le dossier personnel
+        app_dir = Path.home() / ".BudgetApp"
+        # On s'assure que le dossier existe
+        app_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = app_dir / "budget.db"
+
         self._db_manager: Optional[DatabaseManager] = None
         self._validator: Optional[DataValidator] = None
         self._import_export_service: Optional[ImportExportService] = None
-        
+
+        self.mois_actuel: Optional[Mois] = None
+        self._depenses: List[Depense] = []
+        self.categories = ["Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
+
         logger.info("BudgetModel instancié (backend non initialisé)")
 
-    def initialize_backend(self) -> None:
-        """Initialise les services de backend (DB, validation, etc.)."""
-        if self._db_manager is not None:
-            return
-            
-        logger.info("Initialisation du backend (DB, services)...")
+    def get_nombre_depenses(self) -> int:
+        """Retourne le nombre total de dépenses pour le mois actuel."""
+        return len(self._depenses)
+
+    def update_expense(self, index: int, nom: str, montant_str: str, categorie: str, effectue: bool, emprunte: bool) -> Result:
+        """Met à jour une dépense existante."""
+        if not (0 <= index < len(self._depenses)):
+            return Result.error("Index de dépense invalide")
+
+        validation = self._validator.validate_expense_data(nom, montant_str, categorie)
+        if not validation.is_valid:
+            return Result.error("\n".join(validation.errors))
+
+        depense_a_jour = self._depenses[index]
+        depense_a_jour.nom = validation.validated_data['nom']
+        depense_a_jour.montant = validation.validated_data['montant']
+        depense_a_jour.categorie = validation.validated_data['categorie']
+        depense_a_jour.effectue = effectue
+        depense_a_jour.emprunte = emprunte
+
         try:
-            self._db_manager = DatabaseManager(self._get_database_path())
+            self._db_manager.update_depense(depense_a_jour)
+            self.notify_observers('expense_updated', {'index': index, 'depense': depense_a_jour})
+            return Result.success()
+        except DatabaseError as e:
+            return Result.error(str(e))
+
+    # --- CORRECTION 2 : Suppression par ID ---
+    def remove_expense_by_id(self, depense_id: int) -> Result:
+        """Supprime une dépense en utilisant son ID unique."""
+        try:
+            # On supprime d'abord de la base de données
+            self._db_manager.delete_depense(depense_id)
+
+            # Ensuite, on met à jour notre liste en mémoire
+            # On cherche l'index de la dépense avec cet ID pour la notifier à la vue
+            index_to_remove = -1
+            for i, dep in enumerate(self._depenses):
+                if dep.id == depense_id:
+                    index_to_remove = i
+                    break
+            
+            if index_to_remove != -1:
+                self._depenses.pop(index_to_remove)
+                # On notifie la vue pour qu'elle supprime la bonne ligne
+                self.notify_observers('expense_removed', {'index': index_to_remove})
+            
+            return Result.success()
+        except DatabaseError as e:
+            return Result.error(str(e))
+
+    def initialize_backend(self):
+        """Initialise les composants du backend."""
+        if not self._db_manager:
+            self._db_manager = DatabaseManager(self.db_path)
             self._validator = DataValidator()
             self._import_export_service = ImportExportService(self._db_manager)
-            logger.info("Backend initialisé avec succès.")
-        except Exception as e:
-            logger.critical(f"Erreur critique lors de l'initialisation du backend: {e}")
-            raise
+            logger.info("Backend initialisé.")
 
     def _get_database_path(self) -> Path:
         """Retourne le chemin vers la base de données"""
@@ -395,16 +435,24 @@ class BudgetModel(Observable):
     
     def get_total_emprunte(self) -> float:
         return sum(d.montant for d in self._depenses if d.emprunte)
-    
-    def get_display_data(self) -> MoisDisplayData:
+
+    def get_display_data(self) -> Optional[MoisDisplayData]:
+        """Retourne un DTO avec toutes les données nécessaires pour l'affichage complet."""
+        if not self.mois_actuel:
+            return None
+        
+        total_depenses = self.get_total_depenses()
+        total_effectue = self.get_total_depenses_effectuees()
+        
         return MoisDisplayData(
-            nom=self.mois_actuel.nom if self.mois_actuel else "Aucun mois",
+            nom=self.mois_actuel.nom,
             salaire=self.salaire,
-            depenses=self.depenses,
-            total_depenses=self.get_total_depenses(),
-            argent_restant=self.get_argent_restant(),
-            total_effectue=self.get_total_depenses_effectuees(),
-            total_non_effectue=self.get_total_depenses_non_effectuees(),
+            depenses=self._depenses,
+            nombre_depenses=len(self._depenses), # <-- Ajout ici
+            total_depenses=total_depenses,
+            argent_restant=self.salaire - total_depenses,
+            total_effectue=total_effectue,
+            total_non_effectue=total_depenses - total_effectue,
             total_emprunte=self.get_total_emprunte()
         )
     
@@ -520,3 +568,22 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.critical(f"Erreur inattendue lors de l'import Excel: {e}")
             return Result.error("Une erreur inattendue s'est produite lors de l'import.")
+        
+    # AJOUT : Méthodes pour gérer le thème
+    def save_theme_preference(self, theme: str):
+        """Sauvegarde le thème préféré ('light' or 'dark') dans la config."""
+        try:
+            self._db_manager.save_config('theme', theme)
+            # On notifie les observateurs que le thème a changé
+            self.notify_observers('theme_changed', theme)
+        except Exception as e:
+            logger.warning(f"Impossible de sauvegarder la préférence de thème : {e}")
+
+    def get_theme_preference(self) -> str:
+        """Récupère le thème préféré depuis la config, défaut sur 'light'."""
+        try:
+            theme = self._db_manager.get_config('theme')
+            return theme if theme in ['light', 'dark'] else 'light'
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer la préférence de thème : {e}")
+            return 'light'

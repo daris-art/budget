@@ -88,6 +88,7 @@ class MoisDisplayData:
     nom: str
     salaire: float
     depenses: List[Depense]
+    nombre_depenses: int  # <-- AJOUT DE CETTE LIGNE
     total_depenses: float
     argent_restant: float
     total_effectue: float
@@ -242,18 +243,44 @@ class DatabaseManager:
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération du mois: {e}")
     
+    # Dans utils.py, à l'intérieur de la classe DatabaseManager, remplacez cette méthode :
+
     def delete_mois(self, nom: str) -> bool:
-        """Supprime un mois"""
+        """
+        Supprime un mois et toutes ses dépenses associées en deux étapes explicites
+        au sein d'une seule transaction.
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('DELETE FROM mois WHERE nom = ?', (nom,))
-                deleted = cursor.rowcount > 0
+
+                # Étape 1 : Trouver l'ID du mois à partir de son nom.
+                cursor.execute('SELECT id FROM mois WHERE nom = ?', (nom,))
+                row = cursor.fetchone()
+
+                # Si le mois n'est pas trouvé, on ne peut rien supprimer.
+                if not row:
+                    return False
+
+                mois_id = row[0]
+
+                # Étape 2 : Supprimer toutes les dépenses de la table 'depenses'
+                # qui sont associées à cet ID de mois.
+                cursor.execute('DELETE FROM depenses WHERE mois_id = ?', (mois_id,))
+                
+                # Étape 3 : Une fois les dépenses supprimées, supprimer le mois lui-même.
+                cursor.execute('DELETE FROM mois WHERE id = ?', (mois_id,))
+
+                # La transaction est validée automatiquement à la fin du bloc 'with'
                 conn.commit()
-                return deleted
+
+                # On retourne True si la suppression du mois a bien eu lieu (rowcount > 0)
+                return cursor.rowcount > 0
+
         except sqlite3.Error as e:
-            raise DatabaseError(f"Erreur lors de la suppression du mois: {e}")
-    
+            # En cas d'erreur, la transaction est automatiquement annulée.
+            raise DatabaseError(f"Erreur lors de la suppression du mois et de ses dépenses : {e}")
+            
     def update_mois_salaire(self, mois_id: int, salaire: float):
         """Met à jour le salaire d'un mois"""
         try:
