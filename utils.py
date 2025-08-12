@@ -11,6 +11,7 @@ import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
 from dataclasses import dataclass, asdict
 
+
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -580,7 +581,7 @@ class ImportExportService:
 
     # Dans utils.py, remplacez cette méthode dans la classe ImportExportService
 
-    def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
+    def import_from_excel(self, filepath: Path, new_mois_name: str, progress_callback=None) -> Result:
         """
         Lit un fichier Excel, crée un nouveau mois et y importe les opérations.
         Les crédits sont sommés et définissent le salaire initial du mois.
@@ -589,10 +590,11 @@ class ImportExportService:
             workbook = openpyxl.load_workbook(filepath, read_only=True)
             sheet: Worksheet = workbook.active
             
-            # (La logique de recherche des en-têtes reste la même)
             header_row_index = -1
             col_indices = {}
-            for i in range(10, sheet.max_row + 1):
+
+            # Recherche de la ligne d'en-tête à partir de la ligne 10
+            for i in range(1, sheet.max_row + 1): # On commence à la ligne 1 pour plus de flexibilité
                 row_values = [str(cell.value).strip() if cell.value else "" for cell in sheet[i]]
                 if "Libellé" in row_values and "Date" in row_values:
                     header_row_index = i
@@ -607,14 +609,25 @@ class ImportExportService:
             if header_row_index == -1:
                 return Result.error("En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et 'Date' existent.")
 
+            # On lit d'abord toutes les lignes en mémoire pour connaître le total
+            rows_to_process = list(sheet.iter_rows(min_row=header_row_index + 1))
+            total_rows = len(rows_to_process)
+            if total_rows == 0:
+                return Result.error("Aucune donnée trouvée après l'en-tête.")
+
             operations_a_importer: List[Depense] = []
             
-            # On lit toutes les lignes et on les stocke en mémoire
-            for i in range(header_row_index + 1, sheet.max_row + 1):
-                nom = sheet.cell(row=i, column=col_indices["nom"] + 1).value
-                date_val = sheet.cell(row=i, column=col_indices["date"] + 1).value
-                debit_val = sheet.cell(row=i, column=col_indices.get("debit", -1) + 1).value
-                credit_val = sheet.cell(row=i, column=col_indices.get("credit", -1) + 1).value
+            # On parcourt les lignes pré-chargées
+            for i, row in enumerate(rows_to_process):
+                if progress_callback:
+                    percentage = int(((i + 1) / total_rows) * 100)
+                    progress_callback(percentage)
+
+                cells = [cell.value for cell in row]
+                nom = cells[col_indices["nom"]]
+                date_val = cells[col_indices["date"]]
+                debit_val = cells[col_indices.get("debit", -1)] if "debit" in col_indices else None
+                credit_val = cells[col_indices.get("credit", -1)] if "credit" in col_indices else None
 
                 if not nom or not date_val:
                     continue
@@ -634,14 +647,13 @@ class ImportExportService:
                     else:
                         continue
                 except (ValueError, TypeError):
-                    logger.warning(f"Ligne {i} ignorée: montant invalide.")
+                    logger.warning(f"Ligne {i + header_row_index + 1} ignorée: montant invalide.")
                     continue
                 
                 operations_a_importer.append(
-                    Depense(nom=str(nom).strip(), montant=montant, date_depense=date_depense_str, est_credit=est_credit)
+                    Depense(nom=str(nom).strip(), montant=montant, date_depense=date_depense_str, est_credit=est_credit, effectue= True)
                 )
             
-            # --- MODIFICATION ---
             # 1. On calcule le total des crédits qui servira de salaire initial
             salaire_initial = sum(op.montant for op in operations_a_importer if op.est_credit)
 
@@ -662,7 +674,7 @@ class ImportExportService:
         except Exception as e:
             logger.error(f"Erreur inattendue lors de l'import Excel: {e}")
             return Result.error(f"Une erreur inattendue est survenue: {e}")
-                
+                        
 # ===== PATTERN OBSERVER =====
 class Observable:
     """Classe de base pour les objets observables"""

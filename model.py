@@ -3,6 +3,8 @@
 from pathlib import Path
 import logging
 from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
+
 
 from utils import (
     DatabaseManager, DataValidator, ImportExportService, Result,
@@ -386,16 +388,43 @@ class BudgetModel(Observable):
             logger.critical(f"Erreur inattendue lors suppression dépense: {e}")
             return Result.error("Une erreur inattendue s'est produite")
     
-    def sort_depenses(self) -> Result:
-        """Trie les dépenses par montant décroissant"""
+    # Dans model.py, remplacez la méthode sort_depenses
+
+    def sort_depenses(self, sort_key: str) -> Result:
+        """Trie la liste des dépenses en mémoire selon la clé fournie."""
+        if not self.mois_actuel:
+            return Result.error("Aucun mois n'est chargé.")
+
         try:
-            self._depenses.sort(key=lambda d: d.montant, reverse=True)
-            self.notify_observers('expenses_sorted', self._depenses)
-            return Result.success("Dépenses triées")
-        except Exception as e:
-            logger.error(f"Erreur lors du tri des dépenses: {e}")
-            return Result.error("Erreur lors du tri")
-    
+            if sort_key == "montant_desc":
+                self._depenses.sort(key=lambda d: d.montant, reverse=True)
+            elif sort_key == "montant_asc":
+                self._depenses.sort(key=lambda d: d.montant)
+            elif sort_key == "date_desc":
+                # Pour trier les dates au format JJ/MM/AAAA, il faut les convertir
+                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
+            elif sort_key == "date_asc":
+                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'))
+            elif sort_key == "nom_asc":
+                # On trie par le nom en minuscules pour un tri alphabétique insensible à la casse
+                self._depenses.sort(key=lambda d: d.nom.lower())
+            elif sort_key == "nom_desc":
+                self._depenses.sort(key=lambda d: d.nom.lower(), reverse=True)
+            
+            elif sort_key == "type":
+                # Trie par crédit (True=1) puis par débit (False=0), puis par nom
+                self._depenses.sort(key=lambda d: (not d.est_credit, d.nom))
+            else: # Tri par défaut
+                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
+
+            # Une fois la liste triée, on notifie la vue pour qu'elle se redessine
+            self.notify_observers('expenses_sorted', None)
+            return Result.success()
+        except ValueError as e:
+            # Gère le cas où une date aurait un format incorrect
+            logger.error(f"Erreur de tri, format de date invalide: {e}")
+            return Result.error("Certaines dates ont un format invalide et ne peuvent être triées.")
+            
     def clear_all_expenses(self) -> Result:
         """Supprime toutes les dépenses du mois actuel"""
         if not self.mois_actuel:
@@ -550,29 +579,26 @@ class BudgetModel(Observable):
             'argent_restant': self.get_argent_restant()
         }
 
-    def import_from_excel(self, filepath: Path, new_mois_name: str) -> Result:
+    # Dans model.py, remplacez la méthode import_from_excel
+
+    def import_from_excel(self, filepath: Path, new_mois_name: str, progress_callback=None) -> Result:
         """
-        Gère l'importation d'un fichier Excel pour créer un nouveau mois de dépenses.
+        Gère l'importation d'un fichier Excel en passant un callback pour la progression.
         """
         try:
-            # Valider le nom du nouveau mois
             if not new_mois_name or not new_mois_name.strip():
                 return Result.error("Le nom du nouveau mois ne peut pas être vide.")
 
-            # Déléguer l'ensemble du processus au service d'import/export
-            result = self._import_export_service.import_from_excel(filepath, new_mois_name.strip())
-            
-            if result.is_success:
-                # Si l'import réussit, on charge ce nouveau mois pour l'afficher
-                self.load_mois(new_mois_name.strip())
-                # La méthode load_mois s'occupe déjà de notifier les observateurs
+            # --- MODIFICATION ---
+            # On passe le 'progress_callback' au service qui en a besoin
+            result = self._import_export_service.import_from_excel(filepath, new_mois_name.strip(), progress_callback)
             
             return result
 
         except Exception as e:
             logger.critical(f"Erreur inattendue lors de l'import Excel: {e}")
             return Result.error("Une erreur inattendue s'est produite lors de l'import.")
-        
+                      
     # AJOUT : Méthodes pour gérer le thème
     def save_theme_preference(self, theme: str):
         """Sauvegarde le thème préféré ('light' or 'dark') dans la config."""

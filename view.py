@@ -3,13 +3,15 @@
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+import qdarktheme
 
 # On importe les bibliothèques nécessaires
-import qdarktheme
+
+# Dans view.py, ajoutez QDialog à la liste des importations
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea, QMessageBox,
-    QInputDialog, QFileDialog, QGroupBox, QFrame
+    QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -100,21 +102,43 @@ class BudgetView(QMainWindow):
         return group_box
 
     def _create_salary_section(self) -> QGroupBox:
-        """Crée la section pour afficher et modifier le salaire."""
-        group_box = QGroupBox("Revenus")
-        layout = QFormLayout()
+        """Crée la section pour le salaire et les actions de tri."""
+        # --- MODIFICATION : Renommage de la section ---
+        group_box = QGroupBox("Salaire et Actions")
         
+        # On utilise un layout horizontal pour placer les éléments côte à côte
+        layout = QHBoxLayout()
+        
+        # Partie Salaire (à gauche)
+        layout.addWidget(QLabel("Salaire Mensuel (€):"))
         self.salaire_input = QLineEdit("0.0")
         self.salaire_input.setToolTip("Entrez le salaire ou revenu total du mois")
+        self.salaire_input.setFixedWidth(150) # On donne une largeur fixe pour un meilleur visuel
         self.salaire_input.editingFinished.connect(self.controller.handle_set_salaire)
         self.salaire_input.textChanged.connect(self.controller.handle_live_update)
+        layout.addWidget(self.salaire_input)
         
-        layout.addRow("Salaire Mensuel (€):", self.salaire_input)
+        # Espaceur qui pousse les éléments de tri vers la droite
+        layout.addStretch()
+        
+        # --- DÉPLACEMENT : Partie Tri (à droite) ---
+        layout.addWidget(QLabel("Trier par :"))
+        self.sort_combo = QComboBox()
+        self.sort_options = {
+            "Date (plus récentes d'abord)": "date_desc",
+            "Date (plus anciennes d'abord)": "date_asc",
+            "Montant (plus élevé d'abord)": "montant_desc",
+            "Montant (plus bas d'abord)": "montant_asc",
+            "Nom (A-Z)": "nom_asc",
+            "Nom (Z-A)": "nom_desc",
+            "Type (revenus puis dépenses)": "type"
+        }
+        self.sort_combo.addItems(self.sort_options.keys())
+        self.sort_combo.activated.connect(self.controller.handle_sort_expenses)
+        layout.addWidget(self.sort_combo)
         
         group_box.setLayout(layout)
         return group_box
-
-    # Dans view.py, remplacez ces trois méthodes
 
     def _create_expenses_section(self) -> QGroupBox:
         """Crée la section des dépenses avec la liste scrollable."""
@@ -139,7 +163,6 @@ class BudgetView(QMainWindow):
             
             header_layout.addWidget(label, 0, i, alignment)
         
-        # --- MODIFICATION : Ajustement des proportions des colonnes ---
         # On ajuste les proportions pour rendre la première colonne la plus petite possible.
         header_layout.setColumnStretch(0, 0)  # Type (facteur 0 pour une largeur minimale)
         header_layout.setColumnStretch(1, 6)  # Nom
@@ -151,18 +174,19 @@ class BudgetView(QMainWindow):
         header_layout.setColumnStretch(7, 1)  # Actions
         main_layout.addLayout(header_layout)
 
-        # ... Le reste de la méthode reste identique ...
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         self.expenses_container = QWidget()
         self.expenses_layout = QVBoxLayout(self.expenses_container)
-        self.expenses_layout.setSpacing(2)
+        self.expenses_layout.setSpacing(2) 
         self.expenses_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(scroll_area)
+        
         btn_add_expense = QPushButton("➕ Ajouter une dépense")
         btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         main_layout.addWidget(btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
+
         group_box.setLayout(main_layout)
         return group_box
 
@@ -180,6 +204,7 @@ class BudgetView(QMainWindow):
         # Création des autres widgets (inchangé)
         nom_input = QLineEdit(depense.nom)
         montant_input = QLineEdit(str(depense.montant))
+        montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
         date_input = QLineEdit(depense.date_depense)
         date_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cat_combo = QComboBox()
@@ -227,6 +252,22 @@ class BudgetView(QMainWindow):
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+
+    def get_sort_key(self) -> str:
+        """Récupère la clé de tri actuelle depuis la combobox."""
+        current_text = self.sort_combo.currentText()
+        return self.sort_options.get(current_text, "date_desc")
+    
+    def set_import_buttons_enabled(self, enabled: bool):
+        """
+        Active ou désactive les boutons d'importation pour éviter les clics multiples
+        pendant une opération en arrière-plan.
+        """
+        # On parcourt tous les boutons de l'application
+        for button in self.findChildren(QPushButton):
+            # Si le texte d'un bouton contient "Importer", on l'active/désactive
+            if "Importer" in button.text():
+                button.setEnabled(enabled)
     
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         """Récupère les données d'une ligne de dépense de l'UI."""
@@ -302,11 +343,17 @@ class BudgetView(QMainWindow):
 
         group_box.setLayout(main_layout)
         return group_box
-        
+
     def _create_status_bar(self):
-        """Crée la barre de statut."""
+        """Crée la barre de statut avec une barre de progression."""
         self.status_bar = self.statusBar()
         self.status_bar.showMessage("Prêt.")
+
+        # --- AJOUT : Création de la barre de progression ---
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedWidth(200) # On lui donne une largeur fixe
+        self.status_bar.addPermanentWidget(self.progress_bar) # On l'ajoute à droite de la barre de statut
+        self.progress_bar.hide() # On la cache par défaut
 
     def apply_theme(self, theme: str):
         """Applique un thème à l'ensemble de l'application."""
@@ -437,6 +484,20 @@ class BudgetView(QMainWindow):
         style = "color: red;" if is_error else ""
         self.status_bar.setStyleSheet(style)
         self.status_bar.showMessage(text, duration)
+
+    def show_progress_bar(self):
+        """Affiche et initialise la barre de progression."""
+        self.progress_bar.setValue(0)
+        self.progress_bar.show()
+
+    def update_progress_bar(self, value: int):
+        """Met à jour la valeur de la barre de progression."""
+        self.progress_bar.setValue(value)
+
+
+    def hide_progress_bar(self):
+        """Cache la barre de progression."""
+        self.progress_bar.hide()
 
     def clear_for_loading(self, message: str = "Chargement..."):
         self.clear_all_expenses()
