@@ -5,15 +5,12 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import qdarktheme
 
-# On importe les bibliothèques nécessaires
-
-# Dans view.py, ajoutez QDialog à la liste des importations
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea, QMessageBox,
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
 
 import logging
@@ -30,6 +27,7 @@ class BudgetView(QMainWindow):
         self.expense_rows: List[QWidget] = []
         # Dictionnaire pour stocker les labels du résumé
         self.summary_labels: Dict[str, QLabel] = {}
+        self._scroll_on_range_change = False
         self._init_ui()
 
     def _init_ui(self):
@@ -131,6 +129,8 @@ class BudgetView(QMainWindow):
             "Montant (plus bas d'abord)": "montant_asc",
             "Nom (A-Z)": "nom_asc",
             "Nom (Z-A)": "nom_desc",
+            "Payé d'abord": "effectue_desc",
+            "Non payé d'abord": "effectue_asc",
             "Type (revenus puis dépenses)": "type"
         }
         self.sort_combo.addItems(self.sort_options.keys())
@@ -174,14 +174,16 @@ class BudgetView(QMainWindow):
         header_layout.setColumnStretch(7, 1)  # Actions
         main_layout.addLayout(header_layout)
 
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        
+
         self.expenses_container = QWidget()
         self.expenses_layout = QVBoxLayout(self.expenses_container)
         self.expenses_layout.setSpacing(2) 
         self.expenses_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        scroll_area.setWidget(self.expenses_container)
-        main_layout.addWidget(scroll_area)
+        self.scroll_area.setWidget(self.expenses_container)
+        main_layout.addWidget(self.scroll_area)
         
         btn_add_expense = QPushButton("➕ Ajouter une dépense")
         btn_add_expense.clicked.connect(self.controller.handle_add_expense)
@@ -253,6 +255,14 @@ class BudgetView(QMainWindow):
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 
+        #scrolle toute en bas
+        QApplication.processEvents()
+        QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(
+            self.scroll_area.verticalScrollBar().maximum()
+        ))
+        #met le focus sur le nom
+        nom_input.setFocus()
+    
     def get_sort_key(self) -> str:
         """Récupère la clé de tri actuelle depuis la combobox."""
         current_text = self.sort_combo.currentText()

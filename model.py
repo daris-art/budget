@@ -410,6 +410,12 @@ class BudgetModel(Observable):
                 self._depenses.sort(key=lambda d: d.nom.lower())
             elif sort_key == "nom_desc":
                 self._depenses.sort(key=lambda d: d.nom.lower(), reverse=True)
+            elif sort_key == "effectue_desc":
+                # Trie pour que les dépenses effectuées (True) apparaissent en premier
+                self._depenses.sort(key=lambda d: d.effectue, reverse=True)
+            elif sort_key == "effectue_asc":
+                # Trie pour que les dépenses non effectuées (False) apparaissent en premier
+                self._depenses.sort(key=lambda d: d.effectue)
             
             elif sort_key == "type":
                 # Trie par crédit (True=1) puis par débit (False=0), puis par nom
