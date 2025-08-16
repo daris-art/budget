@@ -39,29 +39,6 @@ class BudgetModel(Observable):
         """Retourne le nombre total de dépenses pour le mois actuel."""
         return len(self._depenses)
 
-    def update_expense(self, index: int, nom: str, montant_str: str, categorie: str, effectue: bool, emprunte: bool) -> Result:
-        """Met à jour une dépense existante."""
-        if not (0 <= index < len(self._depenses)):
-            return Result.error("Index de dépense invalide")
-
-        validation = self._validator.validate_expense_data(nom, montant_str, categorie)
-        if not validation.is_valid:
-            return Result.error("\n".join(validation.errors))
-
-        depense_a_jour = self._depenses[index]
-        depense_a_jour.nom = validation.validated_data['nom']
-        depense_a_jour.montant = validation.validated_data['montant']
-        depense_a_jour.categorie = validation.validated_data['categorie']
-        depense_a_jour.effectue = effectue
-        depense_a_jour.emprunte = emprunte
-
-        try:
-            self._db_manager.update_depense(depense_a_jour)
-            self.notify_observers('expense_updated', {'index': index, 'depense': depense_a_jour})
-            return Result.success()
-        except DatabaseError as e:
-            return Result.error(str(e))
-
     # --- CORRECTION 2 : Suppression par ID ---
     def remove_expense_by_id(self, depense_id: int) -> Result:
         """Supprime une dépense en utilisant son ID unique."""
@@ -589,17 +566,14 @@ class BudgetModel(Observable):
 
     def import_from_excel(self, filepath: Path, new_mois_name: str, progress_callback=None) -> Result:
         """
-        Gère l'importation d'un fichier Excel en passant un callback pour la progression.
+        Gère l'importation d'un fichier Excel 
         """
         try:
             if not new_mois_name or not new_mois_name.strip():
                 return Result.error("Le nom du nouveau mois ne peut pas être vide.")
 
-            # --- MODIFICATION ---
-            # On passe le 'progress_callback' au service qui en a besoin
-            result = self._import_export_service.import_from_excel(filepath, new_mois_name.strip(), progress_callback)
-            
-            return result
+            result = self._import_export_service.import_from_excel(filepath, new_mois_name.strip())   
+            return result    
 
         except Exception as e:
             logger.critical(f"Erreur inattendue lors de l'import Excel: {e}")

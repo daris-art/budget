@@ -618,10 +618,7 @@ class ImportExportService:
             operations_a_importer: List[Depense] = []
             
             # On parcourt les lignes pré-chargées
-            for i, row in enumerate(rows_to_process):
-                if progress_callback:
-                    percentage = int(((i + 1) / total_rows) * 100)
-                    progress_callback(percentage)
+            for row in rows_to_process: 
 
                 cells = [cell.value for cell in row]
                 nom = cells[col_indices["nom"]]

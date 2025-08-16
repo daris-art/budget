@@ -260,8 +260,24 @@ class BudgetView(QMainWindow):
         QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(
             self.scroll_area.verticalScrollBar().maximum()
         ))
-        #met le focus sur le nom
-        nom_input.setFocus()
+
+
+    def focus_on_last_expense_name(self):
+        """Met le focus sur le champ 'Nom' de la toute dernière ligne de dépense."""
+        # On vérifie qu'il y a bien des lignes
+        if not self.expense_rows:
+            return
+
+        # On récupère le dernier widget de ligne ajouté
+        last_row_widget = self.expense_rows[-1]
+        
+        # On accède à son layout pour trouver le champ QLineEdit du nom
+        # Rappel : le nom est dans la colonne 1 (0: émoji, 1: nom)
+        name_input_widget = last_row_widget.layout().itemAtPosition(0, 1).widget()
+        
+        # On s'assure que c'est bien un QLineEdit avant de mettre le focus
+        if isinstance(name_input_widget, QLineEdit):
+            name_input_widget.setFocus()
     
     def get_sort_key(self) -> str:
         """Récupère la clé de tri actuelle depuis la combobox."""
@@ -495,19 +511,31 @@ class BudgetView(QMainWindow):
         self.status_bar.setStyleSheet(style)
         self.status_bar.showMessage(text, duration)
 
-    def show_progress_bar(self):
+    # Dans le fichier view.py, modifiez ces deux méthodes
+
+    def show_progress_bar(self, indeterminate: bool = False):
         """Affiche et initialise la barre de progression."""
-        self.progress_bar.setValue(0)
+        if indeterminate:
+            # Le mode indéterminé est activé en mettant la plage à (0, 0)
+            self.progress_bar.setRange(0, 0)
+        else:
+            # On s'assure que la barre est en mode normal (0-100)
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
         self.progress_bar.show()
 
+    def hide_progress_bar(self):
+        """Cache la barre de progression et la réinitialise."""
+        self.progress_bar.hide()
+        # On la remet en mode normal pour les futurs imports Excel
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)        
+    
     def update_progress_bar(self, value: int):
         """Met à jour la valeur de la barre de progression."""
         self.progress_bar.setValue(value)
 
 
-    def hide_progress_bar(self):
-        """Cache la barre de progression."""
-        self.progress_bar.hide()
 
     def clear_for_loading(self, message: str = "Chargement..."):
         self.clear_all_expenses()

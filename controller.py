@@ -5,7 +5,7 @@ import logging
 
 # --- AJOUT : Imports nécessaires pour le multithreading ---
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
-
+from PyQt6.QtWidgets import QApplication
 from utils import Result # Assurez-vous que Result est bien importable
 
 logger = logging.getLogger(__name__)
@@ -16,10 +16,8 @@ class ExcelImportWorker(QObject):
     """
     Worker qui effectue l'importation Excel dans un thread séparé.
     """
-    # Signal émis lorsque la tâche est terminée. Il transmet l'objet Result.
     finished = pyqtSignal(Result)
-
-    progress = pyqtSignal(int)
+    # Le signal de progression n'est plus nécessaire
 
     def __init__(self, model, filepath, new_name):
         super().__init__()
@@ -28,12 +26,24 @@ class ExcelImportWorker(QObject):
         self.new_name = new_name
 
     def run(self):
-        """Exécute la tâche d'importation en passant le signal de progression."""
+        """Exécute la tâche d'importation de manière sécurisée."""
         logger.info("Le worker d'import Excel démarre...")
-        # On passe notre signal 'progress.emit' comme une fonction de rappel
-        result = self.model.import_from_excel(self.filepath, self.new_name, progress_callback=self.progress.emit)
+        try:
+            # On exécute l'import comme avant
+            result = self.model.import_from_excel(self.filepath, self.new_name)
+        except Exception as e:
+            # --- AJOUT CRUCIAL ---
+            # Si N'IMPORTE QUELLE erreur se produit pendant l'import,
+            # on la capture ici.
+            logger.critical(f"Erreur non interceptée dans le worker d'import: {e}")
+            # On crée un objet Result d'erreur pour l'envoyer au thread principal.
+            result = Result.error(f"Une erreur critique est survenue dans le worker: {e}")
+        
+        # Quoi qu'il arrive (succès ou erreur), la variable 'result'
+        # contiendra un objet Result valide.
         self.finished.emit(result)
         logger.info("Le worker d'import Excel a terminé.")
+
 
 
 class BudgetController:
@@ -63,7 +73,6 @@ class BudgetController:
         result = self.model.load_data_from_last_session()
         self._handle_result(result, show_success=False)
     
-    # --- MODIFICATION : Le gestionnaire d'import Excel ---
     def handle_import_from_excel(self):
         """Gère l'import depuis un fichier Excel en utilisant un QThread."""
         filepath = self.view.get_excel_import_filepath()
@@ -77,50 +86,54 @@ class BudgetController:
         if not new_name:
             return
 
+        # 1. D'abord, on configure l'UI
         self.view.set_import_buttons_enabled(False)
         self.view.update_status_bar(f"Importation de '{filepath.name}' en cours...", duration=0)
-        # --- AJOUT : On affiche la barre de progression ---
-        self.view.show_progress_bar()
+        self.view.show_progress_bar(indeterminate=True)
         
+        # 2. CRUCIAL : On force la mise à jour de l'UI avant de démarrer le thread
+        QApplication.processEvents()
+        
+        # 3. Ensuite, on prépare le thread
         self.import_thread = QThread()
         self.import_worker = ExcelImportWorker(self.model, filepath, new_name)
         self.import_worker.moveToThread(self.import_thread)
         
-        # --- MODIFICATION : On connecte le nouveau signal de progression ---
+        # 4. On connecte les signaux
         self.import_thread.started.connect(self.import_worker.run)
         self.import_worker.finished.connect(self._on_import_excel_finished)
-        self.import_worker.progress.connect(self._on_import_progress) # Nouvelle connexion
-        
         self.import_worker.finished.connect(self.import_thread.quit)
         self.import_worker.finished.connect(self.import_worker.deleteLater)
         self.import_thread.finished.connect(self.import_thread.deleteLater)
 
-        self.import_thread.start()
-    
+        # 5. On démarre le thread avec un léger délai pour s'assurer que l'UI est à jour
+        QTimer.singleShot(100, self.import_thread.start)
+
+
+    # Dans le fichier controller.py, à l'intérieur de la classe BudgetController
 
     def _on_import_excel_finished(self, result: Result):
         """Slot qui gère le résultat une fois l'import terminé, dans le thread principal."""
-        self.view.set_import_buttons_enabled(True)
-        self.view.update_status_bar("Importation terminée.", duration=3000)
-
-        # On affiche le message de succès ou d'erreur
+        # 1. On traite le résultat de l'import (succès ou erreur)
         self._handle_result(result)
         
-        # --- CORRECTION ---
-        # Si l'import a réussi, C'EST ICI que l'on déclenche le chargement
-        # des données et la mise à jour de l'interface, en toute sécurité.
-        if result.is_success:
-            # On récupère le nom du mois qui a été créé depuis le worker
+        # 2. Si l'import a réussi, on procède au chargement dans l'UI
+        if result.is_success and self.import_worker:
             new_name = self.import_worker.new_name
+            
+            # On met à jour le statut pour indiquer que l'affichage est en cours
+            self.view.update_status_bar("Mise à jour de l'affichage...", duration=0)
+            
+            # On charge les données, ce qui déclenche l'ajout de toutes les lignes
             self.model.load_mois(new_name)
+            
+            # On force l'UI à se redessiner complètement AVANT de continuer
+            QApplication.processEvents()
 
-    def _on_import_progress(self, value: int):
-        """
-        Slot qui reçoit le signal de progression du worker et met à jour
-        la barre de progression dans la vue.
-        """
-        if self.view:
-            self.view.update_progress_bar(value)
+        # 3. À la toute fin (que l'import ait réussi ou non), on cache la barre et on réactive les boutons.
+        self.view.hide_progress_bar()
+        self.view.set_import_buttons_enabled(True)
+        self.view.update_status_bar("Opération terminée.", duration=3000)
 
     def handle_update_expense(self, index: int):
         """Gère la mise à jour d'une dépense."""
@@ -163,16 +176,26 @@ class BudgetController:
             if nom_mois and (not self.model.mois_actuel or self.model.mois_actuel.nom != nom_mois):
                 self._load_mois_async(nom_mois)
 
+    # Dans le fichier controller.py, modifiez la méthode _load_mois_async
+
     def _load_mois_async(self, nom_mois: str):
         """Charge les données d'un mois de manière asynchrone pour ne pas geler l'UI."""
         self.view.clear_for_loading(f"Chargement de '{nom_mois}'...")
+        self.view.show_progress_bar(indeterminate=True)
+        
+        # Force la mise à jour de l'UI
+        QApplication.processEvents()
 
         def do_load():
-            result = self.model.load_mois(nom_mois)
-            self._handle_result(result, show_success=False)
+            try:
+                result = self.model.load_mois(nom_mois)
+                self._handle_result(result, show_success=False)
+            finally:
+                # S'assurer que la barre est toujours cachée, même en cas d'erreur
+                self.view.hide_progress_bar()
 
-        # 2. On remplace self.master.after par QTimer.singleShot
-        QTimer.singleShot(50, do_load)
+        # Délai suffisant pour que la barre soit visible
+        QTimer.singleShot(150, do_load)
 
     def handle_delete_mois(self):
         """Gère la suppression du mois actuel."""
@@ -298,9 +321,16 @@ class BudgetController:
         if not new_name:
             return
         
-        # On lance l'import dans le modèle
+        # --- AJOUT : Affichage de la barre de progression ---
+        self.view.show_progress_bar(indeterminate=True)
+        self.view.update_status_bar(f"Importation de '{filepath.name}'...", duration=0)
+        QApplication.processEvents() # Force la mise à jour de l'UI
+
         result = self.model.import_from_json(filepath, new_name)
-        # Si l'import réussit, le modèle notifiera la vue qui se mettra à jour.
+        
+        # --- AJOUT : On cache la barre une fois l'opération terminée ---
+        self.view.hide_progress_bar()
+        
         self._handle_result(result)
 
     # --- MÉTHODE DE L'OBSERVATEUR ---
@@ -319,7 +349,7 @@ class BudgetController:
                 self.view.apply_theme(data)
         
         # On s'assure que la liste des mois est aussi rafraîchie lors de ces événements
-        elif event_type in ['mois_created', 'mois_loaded', 'data_imported']:
+        elif event_type in ['mois_created', 'mois_loaded']:
             self._refresh_complete_view()
             self._refresh_mois_list() # <- C'EST LA LIGNE QUI MANQUAIT
 
@@ -332,9 +362,17 @@ class BudgetController:
             # Pas besoin de rafraîchir toute la vue, juste le salaire et le résumé
             self.view.update_salary_display(data)
             self._refresh_summary_view()
+        
         elif event_type == 'expense_added':
+            # 1. On ajoute le widget à la vue (qui va aussi scroller)
             self.view.add_expense_widget(data, len(self.model.depenses) - 1)
+            
+            # 2. --- AJOUT : On demande explicitement à la vue de mettre le focus ---
+            self.view.focus_on_last_expense_name()
+            
+            # 3. On met à jour le résumé comme avant
             self._refresh_summary_view()
+
         elif event_type == 'expense_updated':
             self._refresh_summary_view()
         elif event_type == 'expense_removed':
@@ -450,5 +488,7 @@ class BudgetController:
         current_theme = self.model.get_theme_preference()
         new_theme = 'dark' if current_theme == 'light' else 'light'
         self.model.save_theme_preference(new_theme)
+
+
 
     
