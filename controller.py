@@ -230,7 +230,20 @@ class BudgetController:
         default_new_name = f"Copie de {original_name}"
         new_name = self.view.ask_for_string("Dupliquer le mois", "Entrez le nom du nouveau mois :", default_new_name)
         if new_name:
+            # 1. On affiche la barre de chargement en mode indéterminé
+            self.view.show_progress_bar(indeterminate=True)
+            self.view.update_status_bar(f"Duplication vers '{new_name}' en cours...", duration=0)
+            
+            # 2. On force l'interface à se mettre à jour pour afficher la barre
+            QApplication.processEvents()
+
+            # 3. On exécute l'opération de duplication, qui va charger le nouveau mois et ajouter les lignes
             result = self.model.duplicate_mois(new_name)
+            
+            # 4. Une fois que TOUT est terminé (y compris l'ajout des lignes), on cache la barre
+            self.view.hide_progress_bar()
+            
+            # 5. On gère le résultat final (affichage message de succès ou d'erreur)
             self._handle_result(result)
 
     def handle_set_salaire(self):
@@ -366,6 +379,9 @@ class BudgetController:
         elif event_type == 'expense_added':
             # 1. On ajoute le widget à la vue (qui va aussi scroller)
             self.view.add_expense_widget(data, len(self.model.depenses) - 1)
+
+            # On demande explicitement à la vue de défiler vers le bas.
+            self.view.scroll_expenses_to_bottom()
             
             # 2. --- AJOUT : On demande explicitement à la vue de mettre le focus ---
             self.view.focus_on_last_expense_name()
@@ -392,6 +408,9 @@ class BudgetController:
         if display_data:
             self.view.update_complete_display(display_data)
             self.view.update_status_bar("Affichage mis à jour.")
+
+            # Après avoir rafraîchi toute la vue, on demande un défilement vers le haut.
+            self.view.scroll_expenses_to_top()
 
     def _refresh_summary_view(self):
         """Ne met à jour que le récapitulatif."""

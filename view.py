@@ -255,12 +255,6 @@ class BudgetView(QMainWindow):
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 
-        #scrolle toute en bas
-        QApplication.processEvents()
-        QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(
-            self.scroll_area.verticalScrollBar().maximum()
-        ))
-
 
     def focus_on_last_expense_name(self):
         """Met le focus sur le champ 'Nom' de la toute dernière ligne de dépense."""
@@ -278,6 +272,22 @@ class BudgetView(QMainWindow):
         # On s'assure que c'est bien un QLineEdit avant de mettre le focus
         if isinstance(name_input_widget, QLineEdit):
             name_input_widget.setFocus()
+
+    def scroll_expenses_to_top(self):
+        """Fait défiler la zone des dépenses vers sa position la plus haute (le début)."""
+        # On utilise un QTimer pour s'assurer que l'UI a le temps de se redessiner
+        # avant de tenter de faire défiler.
+        QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(0))
+        
+    def scroll_expenses_to_bottom(self):
+        """
+        Fait défiler la zone des dépenses vers sa position la plus basse.
+        Utilise un QTimer pour s'assurer que la mise en page est à jour.
+        """
+        QApplication.processEvents()
+        QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(
+            self.scroll_area.verticalScrollBar().maximum()
+        ))
     
     def get_sort_key(self) -> str:
         """Récupère la clé de tri actuelle depuis la combobox."""
@@ -468,8 +478,17 @@ class BudgetView(QMainWindow):
     def update_complete_display(self, display_data: Any):
         self.update_salary_display(display_data.salaire)
         self.clear_all_expenses()
+        # On parcourt les dépenses à afficher
         for i, depense in enumerate(display_data.depenses):
+            # On ajoute le widget de dépense comme avant
             self.add_expense_widget(depense, i)
+            
+            # AJOUT : On laisse l'interface respirer toutes les 15 lignes.
+            # Cela permet à la barre de progression de s'animer et garde l'UI réactive.
+            if i % 15 == 0:
+                QApplication.processEvents()
+       
+
         summary = {
             "nombre_depenses": display_data.nombre_depenses,
             "total_depenses": display_data.total_depenses,
