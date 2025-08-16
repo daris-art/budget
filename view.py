@@ -49,6 +49,8 @@ class BudgetView(QMainWindow):
     def _create_file_management_section(self) -> QGroupBox:
         """Crée la section de gestion des mois et des actions globales."""
         group_box = QGroupBox("Gestion du Mois")
+        group_box.setObjectName("MonthActionsGroup")
+    
         layout = QHBoxLayout()
 
         layout.addWidget(QLabel("Mois :"))
@@ -296,16 +298,21 @@ class BudgetView(QMainWindow):
         current_text = self.sort_combo.currentText()
         return self.sort_options.get(current_text, "date_desc")
     
-    def set_import_buttons_enabled(self, enabled: bool):
+    # Dans le fichier view.py, remplacez la méthode set_import_buttons_enabled par celle-ci
+
+    def set_month_actions_enabled(self, enabled: bool):
         """
-        Active ou désactive les boutons d'importation pour éviter les clics multiples
-        pendant une opération en arrière-plan.
+        Active ou désactive TOUS les boutons d'action sur le mois.
         """
-        # On parcourt tous les boutons de l'application
-        for button in self.findChildren(QPushButton):
-            # Si le texte d'un bouton contient "Importer", on l'active/désactive
-            if "Importer" in button.text():
-                button.setEnabled(enabled)
+        # On cherche le QGroupBox que nous avons nommé précédemment
+        group_box = self.findChild(QGroupBox, "MonthActionsGroup")
+        if group_box:
+            # On trouve tous les QPushButtons à l'intérieur de ce groupe
+            buttons_in_group = group_box.findChildren(QPushButton)
+            for button in buttons_in_group:
+                # On s'assure de ne pas désactiver le bouton de changement de thème
+                if button != self.btn_toggle_theme:
+                    button.setEnabled(enabled)
     
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         """Récupère les données d'une ligne de dépense de l'UI."""

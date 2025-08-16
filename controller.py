@@ -87,7 +87,7 @@ class BudgetController:
             return
 
         # 1. D'abord, on configure l'UI
-        self.view.set_import_buttons_enabled(False)
+        self.view.set_month_actions_enabled(False)
         self.view.update_status_bar(f"Importation de '{filepath.name}' en cours...", duration=0)
         self.view.show_progress_bar(indeterminate=True)
         
@@ -109,31 +109,30 @@ class BudgetController:
         # 5. On démarre le thread avec un léger délai pour s'assurer que l'UI est à jour
         QTimer.singleShot(100, self.import_thread.start)
 
-
-    # Dans le fichier controller.py, à l'intérieur de la classe BudgetController
+    # Dans le fichier controller.py, remplacez cette méthode
 
     def _on_import_excel_finished(self, result: Result):
-        """Slot qui gère le résultat une fois l'import terminé, dans le thread principal."""
-        # 1. On traite le résultat de l'import (succès ou erreur)
+        """
+        Slot qui gère le résultat une fois l'import en arrière-plan terminé.
+        """
+        # 1. On traite le résultat de l'opération en arrière-plan (lecture du fichier)
         self._handle_result(result)
         
-        # 2. Si l'import a réussi, on procède au chargement dans l'UI
+        # 2. Si la lecture a réussi, on lance la mise à jour de l'interface
         if result.is_success and self.import_worker:
             new_name = self.import_worker.new_name
             
-            # On met à jour le statut pour indiquer que l'affichage est en cours
-            self.view.update_status_bar("Mise à jour de l'affichage...", duration=0)
-            
-            # On charge les données, ce qui déclenche l'ajout de toutes les lignes
-            self.model.load_mois(new_name)
-            
-            # On force l'UI à se redessiner complètement AVANT de continuer
-            QApplication.processEvents()
-
-        # 3. À la toute fin (que l'import ait réussi ou non), on cache la barre et on réactive les boutons.
-        self.view.hide_progress_bar()
-        self.view.set_import_buttons_enabled(True)
-        self.view.update_status_bar("Opération terminée.", duration=3000)
+            # --- CORRECTION ---
+            # Au lieu de gérer manuellement la barre et les boutons ici,
+            # on appelle notre fonction _load_mois_async qui le fait déjà
+            # de manière robuste et garantie.
+            self._load_mois_async(new_name)
+        
+        else:
+            # Si l'import a échoué, on s'assure quand même de tout réactiver
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+            self.view.update_status_bar("L'importation a échoué.", duration=5000)
 
     def handle_update_expense(self, index: int):
         """Gère la mise à jour d'une dépense."""
@@ -178,24 +177,29 @@ class BudgetController:
 
     # Dans le fichier controller.py, modifiez la méthode _load_mois_async
 
+    # Dans le fichier controller.py, remplacez la méthode _load_mois_async
+
     def _load_mois_async(self, nom_mois: str):
         """Charge les données d'un mois de manière asynchrone pour ne pas geler l'UI."""
+        
+        # On désactive les boutons AVANT le bloc try
+        self.view.set_month_actions_enabled(False)
         self.view.clear_for_loading(f"Chargement de '{nom_mois}'...")
         self.view.show_progress_bar(indeterminate=True)
-        
-        # Force la mise à jour de l'UI
         QApplication.processEvents()
 
         def do_load():
             try:
+                # Le travail réel est fait ici
                 result = self.model.load_mois(nom_mois)
                 self._handle_result(result, show_success=False)
             finally:
-                # S'assurer que la barre est toujours cachée, même en cas d'erreur
+                # Ce bloc est GARANTI d'être exécuté, même en cas d'erreur
                 self.view.hide_progress_bar()
+                self.view.set_month_actions_enabled(True)
 
-        # Délai suffisant pour que la barre soit visible
-        QTimer.singleShot(150, do_load)
+        # On planifie l'exécution
+        QTimer.singleShot(50, do_load)
 
     def handle_delete_mois(self):
         """Gère la suppression du mois actuel."""
@@ -220,6 +224,8 @@ class BudgetController:
             result = self.model.rename_mois(new_name)
             self._handle_result(result)
 
+    # Dans le fichier controller.py, remplacez la méthode handle_duplicate_mois
+
     def handle_duplicate_mois(self):
         """Gère la duplication du mois actuel."""
         if not self.model.mois_actuel:
@@ -229,22 +235,21 @@ class BudgetController:
         original_name = self.model.mois_actuel.nom
         default_new_name = f"Copie de {original_name}"
         new_name = self.view.ask_for_string("Dupliquer le mois", "Entrez le nom du nouveau mois :", default_new_name)
+        
         if new_name:
-            # 1. On affiche la barre de chargement en mode indéterminé
-            self.view.show_progress_bar(indeterminate=True)
-            self.view.update_status_bar(f"Duplication vers '{new_name}' en cours...", duration=0)
-            
-            # 2. On force l'interface à se mettre à jour pour afficher la barre
-            QApplication.processEvents()
+            try:
+                # --- DÉBUT DE L'OPÉRATION ---
+                self.view.set_month_actions_enabled(False)
+                self.view.show_progress_bar(indeterminate=True)
+                self.view.update_status_bar(f"Duplication vers '{new_name}' en cours...", duration=0)
+                QApplication.processEvents()
 
-            # 3. On exécute l'opération de duplication, qui va charger le nouveau mois et ajouter les lignes
-            result = self.model.duplicate_mois(new_name)
-            
-            # 4. Une fois que TOUT est terminé (y compris l'ajout des lignes), on cache la barre
-            self.view.hide_progress_bar()
-            
-            # 5. On gère le résultat final (affichage message de succès ou d'erreur)
-            self._handle_result(result)
+                result = self.model.duplicate_mois(new_name)
+                self._handle_result(result)
+            finally:
+                # --- FIN (TOUJOURS EXÉCUTÉ) ---
+                self.view.hide_progress_bar()
+                self.view.set_month_actions_enabled(True)
 
     def handle_set_salaire(self):
         """Gère la mise à jour du salaire."""
@@ -334,17 +339,20 @@ class BudgetController:
         if not new_name:
             return
         
-        # --- AJOUT : Affichage de la barre de progression ---
-        self.view.show_progress_bar(indeterminate=True)
-        self.view.update_status_bar(f"Importation de '{filepath.name}'...", duration=0)
-        QApplication.processEvents() # Force la mise à jour de l'UI
+        try:
+            # --- DÉBUT DE L'OPÉRATION ---
+            self.view.set_month_actions_enabled(False)
+            self.view.show_progress_bar(indeterminate=True)
+            self.view.update_status_bar(f"Importation de '{filepath.name}'...", duration=0)
+            QApplication.processEvents()
 
-        result = self.model.import_from_json(filepath, new_name)
-        
-        # --- AJOUT : On cache la barre une fois l'opération terminée ---
-        self.view.hide_progress_bar()
-        
-        self._handle_result(result)
+            result = self.model.import_from_json(filepath, new_name)
+            self._handle_result(result)
+        finally:
+            # --- FIN (TOUJOURS EXÉCUTÉ) ---
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+
 
     # --- MÉTHODE DE L'OBSERVATEUR ---
     def on_model_changed(self, event_type: str, data: any):
