@@ -205,6 +205,8 @@ class BudgetView(QMainWindow):
 
         # Création des autres widgets (inchangé)
         nom_input = QLineEdit(depense.nom)
+        # Cela force le champ à afficher le début de la chaîne de caractères.
+        nom_input.setCursorPosition(0)
         montant_input = QLineEdit(str(depense.montant))
         montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
         date_input = QLineEdit(depense.date_depense)
