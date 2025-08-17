@@ -1,4 +1,4 @@
-# view.py (Version PyQt6 - Complète et Corrigée)
+# view.py (Version avec fermeture sur 'Échap')
 
 import sys
 from pathlib import Path
@@ -11,33 +11,27 @@ from PyQt6.QtWidgets import (
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
-from PyQt6.QtGui import QFont, QDoubleValidator
+from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 class BudgetView(QMainWindow):
-    """
-    Vue de l'application Budget en utilisant PyQt6.
-    """
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
         self.expense_rows: List[QWidget] = []
-        # Dictionnaire pour stocker les labels du résumé
         self.summary_labels: Dict[str, QLabel] = {}
         self._scroll_on_range_change = False
-        # On crée un validateur pour les nombres décimaux positifs avec 2 chiffres après la virgule.
-        # On le configure pour qu'il accepte la notation locale (virgule ou point).
-        self.amount_validator = QDoubleValidator(0.00, 999999999.99, 2)
-        self.amount_validator.setLocale(QLocale.system())
-        self.amount_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
 
+        self.amount_validator = QDoubleValidator(0.00, 999999999.99, 2)
+        self.amount_validator.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
+        self.amount_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        
         self._init_ui()
 
     def _init_ui(self):
-        """Initialise l'ensemble de l'interface utilisateur."""
         self.setWindowTitle("Application de Budget (PyQt6)")
         self.setGeometry(100, 100, 950, 750)
 
@@ -45,7 +39,6 @@ class BudgetView(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # Création et ajout des différentes sections
         main_layout.addWidget(self._create_file_management_section())
         main_layout.addWidget(self._create_salary_section())
         main_layout.addWidget(self._create_expenses_section())
@@ -53,7 +46,6 @@ class BudgetView(QMainWindow):
         self._create_status_bar()
 
     def _create_file_management_section(self) -> QGroupBox:
-        """Crée la section de gestion des mois et des actions globales."""
         group_box = QGroupBox("Gestion du Mois")
         group_box.setObjectName("MonthActionsGroup")
     
@@ -108,29 +100,20 @@ class BudgetView(QMainWindow):
         return group_box
 
     def _create_salary_section(self) -> QGroupBox:
-        """Crée la section pour le salaire et les actions de tri."""
-        # --- MODIFICATION : Renommage de la section ---
         group_box = QGroupBox("Salaire et Actions")
-        
-        # On utilise un layout horizontal pour placer les éléments côte à côte
         layout = QHBoxLayout()
         
-        # Partie Salaire (à gauche)
         layout.addWidget(QLabel("Salaire Mensuel (€):"))
         self.salaire_input = QLineEdit("0.0")
         self.salaire_input.setToolTip("Entrez le salaire ou revenu total du mois")
-        self.salaire_input.setFixedWidth(150) # On donne une largeur fixe pour un meilleur visuel
-        # --- AJOUT : Application du validateur au champ salaire ---
+        self.salaire_input.setFixedWidth(150)
         self.salaire_input.setValidator(self.amount_validator)
-
         self.salaire_input.editingFinished.connect(self.controller.handle_set_salaire)
         self.salaire_input.textChanged.connect(self.controller.handle_live_update)
         layout.addWidget(self.salaire_input)
         
-        # Espaceur qui pousse les éléments de tri vers la droite
         layout.addStretch()
         
-        # --- DÉPLACEMENT : Partie Tri (à droite) ---
         layout.addWidget(QLabel("Trier par :"))
         self.sort_combo = QComboBox()
         self.sort_options = {
@@ -152,12 +135,10 @@ class BudgetView(QMainWindow):
         return group_box
 
     def _create_expenses_section(self) -> QGroupBox:
-        """Crée la section des dépenses avec la liste scrollable."""
         group_box = QGroupBox("Dépenses")
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()
-        # --- MODIFICATION : Ajout d'une colonne vide pour l'émoji ---
         headers = ["Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
@@ -174,21 +155,19 @@ class BudgetView(QMainWindow):
             
             header_layout.addWidget(label, 0, i, alignment)
         
-        # On ajuste les proportions pour rendre la première colonne la plus petite possible.
-        header_layout.setColumnStretch(0, 0)  # Type (facteur 0 pour une largeur minimale)
-        header_layout.setColumnStretch(1, 6)  # Nom
-        header_layout.setColumnStretch(2, 2)  # Montant
-        header_layout.setColumnStretch(3, 2)  # Date
-        header_layout.setColumnStretch(4, 3)  # Catégorie
-        header_layout.setColumnStretch(5, 1)  # Payé
-        header_layout.setColumnStretch(6, 1)  # Prêt
-        header_layout.setColumnStretch(7, 1)  # Actions
+        header_layout.setColumnStretch(0, 0)
+        header_layout.setColumnStretch(1, 6)
+        header_layout.setColumnStretch(2, 2)
+        header_layout.setColumnStretch(3, 2)
+        header_layout.setColumnStretch(4, 3)
+        header_layout.setColumnStretch(5, 1)
+        header_layout.setColumnStretch(6, 1)
+        header_layout.setColumnStretch(7, 1)
         main_layout.addLayout(header_layout)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         
-
         self.expenses_container = QWidget()
         self.expenses_layout = QVBoxLayout(self.expenses_container)
         self.expenses_layout.setSpacing(2) 
@@ -204,28 +183,29 @@ class BudgetView(QMainWindow):
         return group_box
 
     def add_expense_widget(self, depense: Any, index: int):
-        """Ajoute une ligne de dépense à l'interface."""
         row_widget = QWidget()
         row_widget.depense_id = depense.id
         row_layout = QGridLayout(row_widget)
         row_layout.setContentsMargins(5, 2, 5, 2)
 
-        # --- MODIFICATION : Création du label pour l'émoji ---
         emoji_label = QLabel("🟢" if depense.est_credit else "🔴")
         emoji_label.setToolTip("Revenu" if depense.est_credit else "Dépense")
 
-        # Création des autres widgets (inchangé)
         nom_input = QLineEdit(depense.nom)
-        # Cela force le champ à afficher le début de la chaîne de caractères.
         nom_input.setCursorPosition(0)
-        montant_input = QLineEdit(str(depense.montant))
+        
+        montant_text = "" if depense.montant == 0.0 else str(depense.montant)
+        montant_input = QLineEdit(montant_text)
         montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
-        # --- AJOUT : Application du validateur au champ montant ---
         montant_input.setValidator(self.amount_validator)
         
         date_input = QLineEdit(depense.date_depense)
         date_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         date_input.setInputMask("00/00/0000")
+        
+        if not depense.date_depense:
+            QTimer.singleShot(0, date_input.clear)
+            
         cat_combo = QComboBox()
         cat_combo.addItems(self.controller.model.categories)
         cat_combo.setCurrentText(depense.categorie)
@@ -236,19 +216,16 @@ class BudgetView(QMainWindow):
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
 
-        # --- MODIFICATION : Ajout du widget émoji et décalage des colonnes ---
-        row_layout.addWidget(emoji_label, 0, 0, Qt.AlignmentFlag.AlignCenter) # Colonne 0
-        row_layout.addWidget(nom_input, 0, 1)                                # Colonne 1
-        row_layout.addWidget(montant_input, 0, 2)                             # Colonne 2
-        row_layout.addWidget(date_input, 0, 3)                                # Colonne 3
-        row_layout.addWidget(cat_combo, 0, 4)                                 # Colonne 4
+        row_layout.addWidget(emoji_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(nom_input, 0, 1)
+        row_layout.addWidget(montant_input, 0, 2)
+        row_layout.addWidget(date_input, 0, 3)
+        row_layout.addWidget(cat_combo, 0, 4)
         row_layout.addWidget(effectue_check, 0, 5, Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(emprunte_check, 0, 6, Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(btn_supprimer_depense, 0, 7)
 
-        # --- MODIFICATION ---
-        # On applique EXACTEMENT les mêmes proportions ici.
-        row_layout.setColumnStretch(0, 0)  # Type (facteur 0)
+        row_layout.setColumnStretch(0, 0)
         row_layout.setColumnStretch(1, 6)
         row_layout.setColumnStretch(2, 2)
         row_layout.setColumnStretch(3, 2)
@@ -257,7 +234,6 @@ class BudgetView(QMainWindow):
         row_layout.setColumnStretch(6, 1)
         row_layout.setColumnStretch(7, 1)
 
-        # Connexions (inchangées, les indices des lambdas sont corrects)
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
@@ -272,67 +248,38 @@ class BudgetView(QMainWindow):
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 
-
     def focus_on_last_expense_name(self):
-        """Met le focus sur le champ 'Nom' de la toute dernière ligne de dépense."""
-        # On vérifie qu'il y a bien des lignes
         if not self.expense_rows:
             return
-
-        # On récupère le dernier widget de ligne ajouté
         last_row_widget = self.expense_rows[-1]
-        
-        # On accède à son layout pour trouver le champ QLineEdit du nom
-        # Rappel : le nom est dans la colonne 1 (0: émoji, 1: nom)
         name_input_widget = last_row_widget.layout().itemAtPosition(0, 1).widget()
-        
-        # On s'assure que c'est bien un QLineEdit avant de mettre le focus
         if isinstance(name_input_widget, QLineEdit):
             name_input_widget.setFocus()
 
     def scroll_expenses_to_top(self):
-        """Fait défiler la zone des dépenses vers sa position la plus haute (le début)."""
-        # On utilise un QTimer pour s'assurer que l'UI a le temps de se redessiner
-        # avant de tenter de faire défiler.
         QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(0))
         
     def scroll_expenses_to_bottom(self):
-        """
-        Fait défiler la zone des dépenses vers sa position la plus basse.
-        Utilise un QTimer pour s'assurer que la mise en page est à jour.
-        """
         QApplication.processEvents()
         QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(
             self.scroll_area.verticalScrollBar().maximum()
         ))
     
     def get_sort_key(self) -> str:
-        """Récupère la clé de tri actuelle depuis la combobox."""
         current_text = self.sort_combo.currentText()
         return self.sort_options.get(current_text, "date_desc")
     
-    # Dans le fichier view.py, remplacez la méthode set_import_buttons_enabled par celle-ci
-
     def set_month_actions_enabled(self, enabled: bool):
-        """
-        Active ou désactive TOUS les boutons d'action sur le mois.
-        """
-        # On cherche le QGroupBox que nous avons nommé précédemment
         group_box = self.findChild(QGroupBox, "MonthActionsGroup")
         if group_box:
-            # On trouve tous les QPushButtons à l'intérieur de ce groupe
             buttons_in_group = group_box.findChildren(QPushButton)
             for button in buttons_in_group:
-                # On s'assure de ne pas désactiver le bouton de changement de thème
                 if button != self.btn_toggle_theme:
                     button.setEnabled(enabled)
     
     def get_expense_data(self, index: int) -> Dict[str, Any]:
-        """Récupère les données d'une ligne de dépense de l'UI."""
         if 0 <= index < len(self.expense_rows):
             layout = self.expense_rows[index].layout()
-            # --- MODIFICATION : Ajustement des indices de colonne ---
-            # L'émoji est en colonne 0, donc le nom est en 1, le montant en 2, etc.
             return {
                 "nom": layout.itemAtPosition(0, 1).widget().text(),
                 "montant_str": layout.itemAtPosition(0, 2).widget().text(),
@@ -344,16 +291,10 @@ class BudgetView(QMainWindow):
         return {}
     
     def _create_summary_section(self) -> QGroupBox:
-        """Crée la section récapitulative des totaux sur deux colonnes."""
         group_box = QGroupBox("Récapitulatif")
-        
-        # Le layout principal sera horizontal pour contenir nos deux colonnes
         main_layout = QHBoxLayout()
-
-        # On crée un layout de formulaire pour chaque colonne
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
-
         summary_items = {
             "nombre_depenses": "Nombre de Dépenses:",
             "total_depenses": "Total des Dépenses:",
@@ -362,65 +303,50 @@ class BudgetView(QMainWindow):
             "total_non_effectue": "Dépenses Prévues:",
             "total_emprunte": "Total des Prêts:"
         }
-        
-        # On convertit les items en liste pour pouvoir les diviser
         items = list(summary_items.items())
-        
-        # On calcule le point de division pour avoir deux colonnes équilibrées
         mid_point = (len(items) + 1) // 2
-        
-        # On remplit la colonne de gauche
         for key, text in items[:mid_point]:
             label = QLabel(text)
             value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            
             self.summary_labels[key] = value_label
             left_form_layout.addRow(label, value_label)
-            
-        # On remplit la colonne de droite
         for key, text in items[mid_point:]:
             label = QLabel(text)
             value_label = QLabel("0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-
             self.summary_labels[key] = value_label
             right_form_layout.addRow(label, value_label)
-
-        # On ajoute nos deux colonnes (form layouts) au layout principal
         main_layout.addLayout(left_form_layout)
-        # On ajoute un séparateur vertical pour un meilleur visuel
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.VLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        main_layout.addWidget(separator)
+        separator1 = QFrame()
+        separator1.setFrameShape(QFrame.Shape.VLine)
+        separator1.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator1)
         main_layout.addLayout(right_form_layout)
-        
-        # On ajoute de l'espace flexible pour que les colonnes ne s'étirent pas trop
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.Shape.VLine)
+        separator2.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator2)
+        btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
+        btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
+        btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
+        main_layout.addWidget(btn_voir_graphiques)
         main_layout.addStretch()
-
         group_box.setLayout(main_layout)
         return group_box
 
     def _create_status_bar(self):
-        """Crée la barre de statut avec une barre de progression."""
         self.status_bar = self.statusBar()
         self.status_bar.showMessage("Prêt.")
-
-        # --- AJOUT : Création de la barre de progression ---
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedWidth(200) # On lui donne une largeur fixe
-        self.status_bar.addPermanentWidget(self.progress_bar) # On l'ajoute à droite de la barre de statut
-        self.progress_bar.hide() # On la cache par défaut
+        self.progress_bar.setFixedWidth(200)
+        self.status_bar.addPermanentWidget(self.progress_bar)
+        self.progress_bar.hide()
 
     def apply_theme(self, theme: str):
-        """Applique un thème à l'ensemble de l'application."""
         if not hasattr(self, 'btn_toggle_theme'): return
         self.btn_toggle_theme.setText("☀️" if theme == 'dark' else "🌙")
-
-        # Couleurs personnalisées pour les boutons, adaptées au thème
         custom_styles = ""
-        
         if theme == 'dark':
             custom_styles = """
                 QPushButton#RedButton { background-color: #582A2A; border: 1px solid #8B4545; }
@@ -431,7 +357,7 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValueNegative"] { color: #F87171; }
                 QLabel[cssClass="summaryValuePositive"] { color: #4ADE80; }
             """
-        else: # Thème clair
+        else:
             custom_styles = """
                 QPushButton#RedButton { background-color: #ffdddd; border: 1px solid #ff9999; }
                 QPushButton#RedButton:hover { background-color: #ffbbbb; }
@@ -441,15 +367,7 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValueNegative"] { color: #DC2626; }
                 QLabel[cssClass="summaryValuePositive"] { color: #16A34A; }
             """
-
-        # On ajoute la règle de style pour nos en-têtes décalés
-        # Cette règle est indépendante du thème clair/sombre
-        custom_styles += """
-            QLabel[cssClass="shiftedHeader"] {
-                padding-right: 25px; /* Pousse le texte de 15px vers la gauche */
-            }
-        """
-        
+        custom_styles += """QLabel[cssClass="shiftedHeader"] { padding-right: 25px; }"""
         final_stylesheet = qdarktheme.load_stylesheet(theme) + custom_styles
         app = QApplication.instance()
         if app:
@@ -467,24 +385,17 @@ class BudgetView(QMainWindow):
     def update_salary_display(self, salaire: float):
         self.salaire_input.setText(f"{salaire:.2f}")
 
-    # Dans view.py, remplacez cette méthode
-
     def update_summary_display(self, summary_data: Dict[str, float]):
-        """Met à jour les labels du récapitulatif."""
         for key, value in summary_data.items():
             if key in self.summary_labels:
                 label = self.summary_labels[key]
-                
-                # On formate différemment si c'est le nombre de dépenses
                 if key == "nombre_depenses":
                     label.setText(str(int(value)))
                 else:
                     label.setText(f"{value:,.2f} €".replace(",", " "))
-                
                 label.setProperty("cssClass", "summaryValue")
                 if key == 'argent_restant':
                     label.setProperty("cssClass", "summaryValueNegative" if value < 0 else "summaryValuePositive")
-                
                 label.style().polish(label)
 
     def remove_expense_widget(self, index: int):
@@ -500,17 +411,10 @@ class BudgetView(QMainWindow):
     def update_complete_display(self, display_data: Any):
         self.update_salary_display(display_data.salaire)
         self.clear_all_expenses()
-        # On parcourt les dépenses à afficher
         for i, depense in enumerate(display_data.depenses):
-            # On ajoute le widget de dépense comme avant
             self.add_expense_widget(depense, i)
-            
-            # AJOUT : On laisse l'interface respirer toutes les 15 lignes.
-            # Cela permet à la barre de progression de s'animer et garde l'UI réactive.
             if i % 15 == 0:
                 QApplication.processEvents()
-       
-
         summary = {
             "nombre_depenses": display_data.nombre_depenses,
             "total_depenses": display_data.total_depenses,
@@ -521,7 +425,6 @@ class BudgetView(QMainWindow):
         }
         self.update_summary_display(summary)
 
-    # --- Méthodes de dialogue ---
     def get_new_mois_input(self) -> Optional[Dict[str, str]]:
         nom, ok = QInputDialog.getText(self, "Nouveau Mois", "Entrez le nom du nouveau mois:")
         if ok and nom:
@@ -552,31 +455,21 @@ class BudgetView(QMainWindow):
         self.status_bar.setStyleSheet(style)
         self.status_bar.showMessage(text, duration)
 
-    # Dans le fichier view.py, modifiez ces deux méthodes
-
     def show_progress_bar(self, indeterminate: bool = False):
-        """Affiche et initialise la barre de progression."""
         if indeterminate:
-            # Le mode indéterminé est activé en mettant la plage à (0, 0)
             self.progress_bar.setRange(0, 0)
         else:
-            # On s'assure que la barre est en mode normal (0-100)
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(0)
         self.progress_bar.show()
 
     def hide_progress_bar(self):
-        """Cache la barre de progression et la réinitialise."""
         self.progress_bar.hide()
-        # On la remet en mode normal pour les futurs imports Excel
         self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)        
+        self.progress_bar.setValue(0)
     
     def update_progress_bar(self, value: int):
-        """Met à jour la valeur de la barre de progression."""
         self.progress_bar.setValue(value)
-
-
 
     def clear_for_loading(self, message: str = "Chargement..."):
         self.clear_all_expenses()
@@ -584,31 +477,18 @@ class BudgetView(QMainWindow):
         QApplication.processEvents()
 
     def get_excel_import_filepath(self) -> Optional[Path]:
-        """Ouvre une boîte de dialogue pour sélectionner un fichier Excel (.xlsx)."""
-        filepath, _ = QFileDialog.getOpenFileName(
-            self,
-            "Importer depuis Excel",
-            "",
-            "Fichiers Excel (*.xlsx);;Tous les fichiers (*.*)"
-        )
+        filepath, _ = QFileDialog.getOpenFileName(self, "Importer depuis Excel", "", "Fichiers Excel (*.xlsx);;Tous les fichiers (*.*)")
         return Path(filepath) if filepath else None
 
     def get_import_filepath(self) -> Optional[Path]:
-        """Ouvre une boîte de dialogue pour sélectionner un fichier JSON à importer."""
-        filepath, _ = QFileDialog.getOpenFileName(
-            self,
-            "Importer depuis JSON",
-            "",
-            "Fichiers JSON (*.json);;Tous les fichiers (*.*)"
-        )
+        filepath, _ = QFileDialog.getOpenFileName(self, "Importer depuis JSON", "", "Fichiers JSON (*.json);;Tous les fichiers (*.*)")
         return Path(filepath) if filepath else None
 
     def get_export_filepath(self) -> Optional[Path]:
-        """Ouvre une boîte dedialogue pour sauvegarder un fichier JSON."""
-        filepath, _ = QFileDialog.getSaveFileName(
-            self,
-            "Exporter vers JSON",
-            "",
-            "Fichiers JSON (*.json);;Tous les fichiers (*.*)"
-        )
+        filepath, _ = QFileDialog.getSaveFileName(self, "Exporter vers JSON", "", "Fichiers JSON (*.json);;Tous les fichiers (*.*)")
         return Path(filepath) if filepath else None
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        """Ferme la fenêtre si la touche 'Échap' est pressée."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()

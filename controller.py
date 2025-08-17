@@ -7,6 +7,7 @@ import logging
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication
 from utils import Result # Assurez-vous que Result est bien importable
+from graph_view import GraphDialog
 
 logger = logging.getLogger(__name__)
 
@@ -537,6 +538,28 @@ class BudgetController:
         current_theme = self.model.get_theme_preference()
         new_theme = 'dark' if current_theme == 'light' else 'light'
         self.model.save_theme_preference(new_theme)
+
+    def handle_show_graphs(self):
+        """
+        Ouvre une fenêtre affichant les graphiques pour le mois en cours.
+        """
+        if not self.model.mois_actuel:
+            self.view.show_warning_message("Veuillez charger un mois pour voir les graphiques.")
+            return
+
+        graph_data = self.model.get_graph_data()
+        
+        # On vérifie qu'il y a des données à afficher
+        # graph_data[3] est le dictionnaire des catégories
+        if not graph_data or not graph_data[3]:
+            self.view.show_info_message("Aucune dépense à afficher dans les graphiques pour ce mois.")
+            return
+
+        # On crée et affiche la boîte de dialogue des graphiques
+        # On passe self.view comme "parent" pour que la nouvelle fenêtre s'affiche au-dessus de la principale
+        dialog = GraphDialog(graph_data, self.view)
+        dialog.exec() # .exec() rend la fenêtre "modale", bloquant la fenêtre principale
+
 
 
 
