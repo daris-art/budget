@@ -10,8 +10,8 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea, QMessageBox,
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
+from PyQt6.QtGui import QFont, QDoubleValidator
 
 import logging
 
@@ -28,6 +28,12 @@ class BudgetView(QMainWindow):
         # Dictionnaire pour stocker les labels du résumé
         self.summary_labels: Dict[str, QLabel] = {}
         self._scroll_on_range_change = False
+        # On crée un validateur pour les nombres décimaux positifs avec 2 chiffres après la virgule.
+        # On le configure pour qu'il accepte la notation locale (virgule ou point).
+        self.amount_validator = QDoubleValidator(0.00, 999999999.99, 2)
+        self.amount_validator.setLocale(QLocale.system())
+        self.amount_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+
         self._init_ui()
 
     def _init_ui(self):
@@ -114,6 +120,9 @@ class BudgetView(QMainWindow):
         self.salaire_input = QLineEdit("0.0")
         self.salaire_input.setToolTip("Entrez le salaire ou revenu total du mois")
         self.salaire_input.setFixedWidth(150) # On donne une largeur fixe pour un meilleur visuel
+        # --- AJOUT : Application du validateur au champ salaire ---
+        self.salaire_input.setValidator(self.amount_validator)
+
         self.salaire_input.editingFinished.connect(self.controller.handle_set_salaire)
         self.salaire_input.textChanged.connect(self.controller.handle_live_update)
         layout.addWidget(self.salaire_input)
@@ -211,8 +220,12 @@ class BudgetView(QMainWindow):
         nom_input.setCursorPosition(0)
         montant_input = QLineEdit(str(depense.montant))
         montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
+        # --- AJOUT : Application du validateur au champ montant ---
+        montant_input.setValidator(self.amount_validator)
+        
         date_input = QLineEdit(depense.date_depense)
         date_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        date_input.setInputMask("00/00/0000")
         cat_combo = QComboBox()
         cat_combo.addItems(self.controller.model.categories)
         cat_combo.setCurrentText(depense.categorie)

@@ -466,42 +466,99 @@ class DatabaseManager:
             raise DatabaseError(f"Erreur lors de la récupération du mois par ID: {e}")
 
     def duplicate_mois(self, original_mois_id: int, new_mois_name: str) -> Result:
-        """Crée une copie d'un mois existant avec toutes ses opérations."""
+        """Crée une copie d'un mois existant avec toutes ses opérations au sein d'une seule transaction."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                # On démarre explicitement la transaction
+                cursor.execute("BEGIN TRANSACTION")
+                try:
+                    # Étape 1 : Récupérer les détails du mois original (hors transaction)
+                    original_mois = self.get_mois_by_id(original_mois_id)
+                    if not original_mois:
+                        # Pas besoin d'annuler si rien n'a commencé
+                        return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
 
-                # Étape 1 : Récupérer les détails du mois original
-                original_mois = self.get_mois_by_id(original_mois_id)
-                if not original_mois:
-                    return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
-
-                # Étape 2 : Créer le nouveau mois avec le même salaire
-                # La méthode create_mois gère déjà le cas où le nom existerait
-                new_mois_id = self.create_mois(new_mois_name, original_mois.salaire)
-
-                # Étape 3 : Récupérer toutes les opérations du mois original
-                original_depenses = self.get_depenses_by_mois(original_mois_id)
-
-                # Étape 4 : Insérer des copies de ces opérations pour le nouveau mois
-                for depense in original_depenses:
-                    new_depense = Depense(
-                        nom=depense.nom,
-                        montant=depense.montant,
-                        categorie=depense.categorie,
-                        date_depense=depense.date_depense,
-                        est_credit=depense.est_credit,
-                        effectue=depense.effectue,
-                        emprunte=depense.emprunte
+                    # Étape 2 : Créer le nouveau mois
+                    cursor.execute(
+                        'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
+                        (new_mois_name, original_mois.salaire)
                     )
-                    self.create_depense(new_mois_id, new_depense)
-                
-                conn.commit()
-                return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
+                    new_mois_id = cursor.lastrowid
+
+                    # Étape 3 : Récupérer toutes les opérations du mois original
+                    original_depenses = self.get_depenses_by_mois(original_mois_id)
+
+                    # Étape 4 : Insérer des copies de ces opérations pour le nouveau mois
+                    for depense in original_depenses:
+                        sql = '''
+                            INSERT INTO depenses (
+                                mois_id, nom, montant, categorie, date_depense, 
+                                est_credit, effectue, emprunte
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        '''
+                        values = (
+                            new_mois_id, depense.nom, depense.montant, depense.categorie,
+                            depense.date_depense, depense.est_credit, depense.effectue, depense.emprunte
+                        )
+                        cursor.execute(sql, values)
+                    
+                    # Si tout s'est bien passé jusqu'ici, on valide toutes les modifications
+                    conn.commit()
+                    return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
+
+                except sqlite3.IntegrityError:
+                    conn.rollback() # Annule tout en cas de nom de mois dupliqué
+                    raise DatabaseError(f"Le mois '{new_mois_name}' existe déjà.")
+                except Exception as e:
+                    conn.rollback() # Annule tout si une autre erreur survient
+                    raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
 
         except Exception as e:
-            # Lève une exception personnalisée qui sera attrapée par le modèle
-            raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
+            # Lève une exception qui sera attrapée par le modèle
+            raise DatabaseError(f"Erreur de connexion lors de la duplication du mois : {e}")
+        
+    def import_new_mois(self, nom_mois: str, salaire: float, depenses: List[Depense]):
+        """
+        Crée un nouveau mois et y importe une liste de dépenses dans une transaction unique.
+        Retourne l'ID du nouveau mois créé.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("BEGIN TRANSACTION")
+                try:
+                    # 1. Créer le mois
+                    cursor.execute('INSERT INTO mois (nom, salaire) VALUES (?, ?)', (nom_mois, salaire))
+                    new_mois_id = cursor.lastrowid
+
+                    # 2. Insérer toutes les dépenses
+                    for dep in depenses:
+                        sql = '''
+                            INSERT INTO depenses (
+                                mois_id, nom, montant, categorie, date_depense, 
+                                est_credit, effectue, emprunte
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        '''
+                        values = (
+                            new_mois_id, dep.nom, dep.montant, dep.categorie,
+                            dep.date_depense, dep.est_credit, dep.effectue, dep.emprunte
+                        )
+                        cursor.execute(sql, values)
+                    
+                    # Si tout va bien, on valide
+                    conn.commit()
+                    return new_mois_id
+
+                except sqlite3.IntegrityError:
+                    conn.rollback()
+                    raise DatabaseError(f"Le mois '{nom_mois}' existe déjà.")
+                except Exception as e:
+                    conn.rollback()
+                    raise DatabaseError(f"Erreur durant la transaction d'import, annulation : {e}")
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Erreur de connexion lors de l'import : {e}")
+
 
 # ===== SERVICE IMPORT/EXPORT =====
 class ImportExportService:
@@ -551,35 +608,33 @@ class ImportExportService:
                 return Result.error("Structure JSON invalide : clé 'depenses' manquante.")
 
             salaire = data.get('mois', {}).get('salaire', 0.0)
-
-            new_mois_id = self.db_manager.create_mois(new_mois_name, salaire)
             
-            imported_count = 0
+            depenses_a_importer = []
             for dep_data in data['depenses']:
-                depense = Depense(
-                    id=None,
+                depenses_a_importer.append(Depense(
                     nom=dep_data.get('nom', 'Dépense sans nom'),
                     montant=dep_data.get('montant', 0.0),
                     categorie=dep_data.get('categorie', 'Autres'),
+                    date_depense=dep_data.get('date_depense', datetime.datetime.now().strftime('%d/%m/%Y')),
+                    est_credit=dep_data.get('est_credit', False),
                     effectue=dep_data.get('effectue', False),
                     emprunte=dep_data.get('emprunte', False)
-                )
-                self.db_manager.create_depense(new_mois_id, depense)
-                imported_count += 1
+                ))
             
-            return Result.success(f"Import réussi: {imported_count} dépenses ajoutées à '{new_mois_name}'.")
+            # On appelle la méthode transactionnelle
+            self.db_manager.import_new_mois(new_mois_name, salaire, depenses_a_importer)
+            
+            return Result.success(f"Import réussi: {len(depenses_a_importer)} dépenses ajoutées à '{new_mois_name}'.")
 
         except FileNotFoundError:
             return Result.error("Fichier non trouvé.")
         except json.JSONDecodeError as e:
             return Result.error(f"Erreur de décodage JSON : {e}")
         except DatabaseError as e:
-            return Result.error(str(e))
+            return Result.error(str(e)) # L'erreur de la DB remonte ici
         except Exception as e:
             logger.error(f"Erreur inattendue lors de l'import JSON: {e}")
             return Result.error(f"Une erreur inattendue est survenue: {e}")
-
-    # Dans utils.py, remplacez cette méthode dans la classe ImportExportService
 
     def import_from_excel(self, filepath: Path, new_mois_name: str, progress_callback=None) -> Result:
         """
@@ -654,15 +709,9 @@ class ImportExportService:
             # 1. On calcule le total des crédits qui servira de salaire initial
             salaire_initial = sum(op.montant for op in operations_a_importer if op.est_credit)
 
-            # 2. On crée le mois avec ce salaire
-            try:
-                new_mois_id = self.db_manager.create_mois(new_mois_name, salaire_initial)
-            except DatabaseError as e:
-                return Result.error(str(e))
+            # 2. On appelle notre méthode transactionnelle unique
+            self.db_manager.import_new_mois(new_mois_name, salaire_initial, operations_a_importer)
 
-            # 3. On insère toutes les opérations (crédits et débits) dans la table
-            for op in operations_a_importer:
-                self.db_manager.create_depense(new_mois_id, op)
 
             return Result.success(f"{len(operations_a_importer)} opérations importées dans '{new_mois_name}'.")
 
