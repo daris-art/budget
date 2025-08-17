@@ -293,13 +293,35 @@ class BudgetController:
 
     # Dans controller.py, remplacez la méthode handle_sort_expenses
 
+    # Dans le fichier controller.py, à l'intérieur de la classe BudgetController
+
     def handle_sort_expenses(self):
         """Gère le tri des dépenses en fonction de l'option choisie dans la vue."""
-        if self.model.mois_actuel:
+        if not self.model.mois_actuel:
+            return
+
+        try:
+            # --- DÉBUT DE L'OPÉRATION ---
+            # 1. On désactive les boutons et on affiche la barre de chargement
+            self.view.set_month_actions_enabled(False)
+            self.view.show_progress_bar(indeterminate=True)
+            self.view.update_status_bar("Tri des dépenses en cours...", duration=0)
+            
+            # 2. On force la mise à jour de l'UI pour que les changements soient visibles
+            QApplication.processEvents()
+
+            # 3. On exécute l'opération de tri
             sort_key = self.view.get_sort_key()
             result = self.model.sort_depenses(sort_key)
             self._handle_result(result, show_success=False)
 
+        finally:
+            # --- FIN (TOUJOURS EXÉCUTÉ) ---
+            # 4. On cache la barre et on réactive les boutons
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+            self.view.update_status_bar("Tri terminé.", duration=3000)
+            
     def handle_clear_all_expenses(self):
         """Gère la suppression de toutes les dépenses."""
         if self.model.mois_actuel:
