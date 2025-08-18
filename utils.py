@@ -365,7 +365,7 @@ class DatabaseManager:
                     INSERT INTO depenses (
                         mois_id, nom, montant, categorie, 
                         date_depense, est_credit, effectue, emprunte, est_fixe
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 '''
                 
                 # On s'assure que les valeurs correspondent aux colonnes
