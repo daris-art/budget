@@ -281,7 +281,7 @@ class BudgetModel(Observable):
     # ===== GESTION DES DÉPENSES =====
     def add_expense(self, nom: str = "", montant_str: str = "0", 
                    categorie: str = "Autres", effectue: bool = False, 
-                   emprunte: bool = False) -> Result:
+                   emprunte: bool = False, est_fixe: bool = False) -> Result:
         """Ajoute une nouvelle dépense"""
         if not self.mois_actuel:
             return Result.error("Aucun mois chargé")
@@ -296,7 +296,8 @@ class BudgetModel(Observable):
                 montant=validation_result.validated_data.get('montant', 0.0),
                 categorie=validation_result.validated_data.get('categorie', categorie),
                 effectue=effectue,
-                emprunte=emprunte
+                emprunte=emprunte,
+                est_fixe=est_fixe # <-- AJOUT
             )
             
             depense_id = self._db_manager.create_depense(self.mois_actuel.id, depense)
@@ -316,7 +317,7 @@ class BudgetModel(Observable):
     
     # Dans model.py, remplacez la méthode update_expense dans la classe BudgetModel
 
-    def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, categorie: str, effectue: bool, emprunte: bool) -> Result:
+    def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:
         """Met à jour une dépense existante."""
         if not (0 <= index < len(self._depenses)):
             return Result.error("Index de dépense invalide")
@@ -334,6 +335,7 @@ class BudgetModel(Observable):
         depense_a_jour.date_depense = date_depense
         depense_a_jour.effectue = effectue
         depense_a_jour.emprunte = emprunte
+        depense_a_jour.est_fixe = est_fixe # <-- AJOUT
         # Note: est_credit n'est pas modifié ici, il ne l'est qu'à la création/import.
 
         try:
@@ -393,7 +395,10 @@ class BudgetModel(Observable):
             elif sort_key == "effectue_asc":
                 # Trie pour que les dépenses non effectuées (False) apparaissent en premier
                 self._depenses.sort(key=lambda d: d.effectue)
-            
+
+            elif sort_key == "est_fixe_desc":
+                # Trie pour que les dépenses fixes (True) apparaissent en premier
+                self._depenses.sort(key=lambda d: d.est_fixe, reverse=True)
             elif sort_key == "type":
                 # Trie par crédit (True=1) puis par débit (False=0), puis par nom
                 self._depenses.sort(key=lambda d: (not d.est_credit, d.nom))
@@ -470,21 +475,41 @@ class BudgetModel(Observable):
             total_emprunte=self.get_total_emprunte()
         )
     
+    # Dans model.py, à l'intérieur de la classe BudgetModel
+
+    # Dans model.py, à l'intérieur de la classe BudgetModel
+
     def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float]]:
-        valid_expenses = [d for d in self._depenses if d.montant > 0 and d.nom.strip()]
+        """
+        Prépare les données pour les graphiques en excluant les crédits (revenus)
+        et en tronquant les libellés trop longs.
+        """
+        valid_expenses = [
+            d for d in self._depenses 
+            if d.montant > 0 and d.nom.strip() and not d.est_credit
+        ]
+        
         if not valid_expenses:
             return [], [], 0.0, {}
         
-        labels = [d.nom for d in valid_expenses]
+        # --- MODIFICATION 1 : Tronquer les noms de dépenses pour le graphique en barres ---
+        # On utilise une expression conditionnelle pour ajouter "..." uniquement si le nom est trop long.
+        labels = [
+            (d.nom[:21] + '...') if len(d.nom) > 21 else d.nom 
+            for d in valid_expenses
+        ]
+
         values = [d.montant for d in valid_expenses]
         argent_restant = self.get_argent_restant()
         
         categories_data = {}
         for d in valid_expenses:
-            categories_data[d.categorie] = categories_data.get(d.categorie, 0) + d.montant
+            # --- MODIFICATION 2 : Tronquer les noms de catégories pour le camembert ---
+            categorie_label = (d.categorie[:21] + '...') if len(d.categorie) > 21 else d.categorie
+            categories_data[categorie_label] = categories_data.get(categorie_label, 0) + d.montant
         
         return labels, values, argent_restant, categories_data
-    
+        
     # ===== IMPORT/EXPORT =====
     def export_to_json(self, filepath: Path) -> Result:
         """Orchestre l'export du mois actuel vers un fichier JSON."""

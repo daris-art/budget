@@ -63,7 +63,6 @@ class ValidationResult:
 
 # ===== ENTITÉS DE DONNÉES =====
 @dataclass
-@dataclass
 class Depense:
     """DTO pour une dépense ou une opération."""
     # On ajoute des valeurs par défaut pour plus de flexibilité
@@ -73,9 +72,9 @@ class Depense:
     categorie: str = 'Autres'
     date_depense: str = ''
     est_credit: bool = False
-    
     effectue: bool = False
     emprunte: bool = False
+    est_fixe: bool = False
 
 
 @dataclass
@@ -203,6 +202,7 @@ class DatabaseManager:
                         
                         effectue BOOLEAN NOT NULL DEFAULT 0,
                         emprunte BOOLEAN NOT NULL DEFAULT 0,
+                        est_fixe BOOLEAN NOT NULL DEFAULT 0,
                         FOREIGN KEY (mois_id) REFERENCES mois (id) ON DELETE CASCADE
                     )
                 ''')
@@ -328,7 +328,7 @@ class DatabaseManager:
                 # --- CORRECTION ---
                 # On ajoute 'date_depense' et 'est_credit' à la requête SELECT
                 sql = '''
-                    SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte 
+                    SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte, est_fixe
                     FROM depenses WHERE mois_id = ?
                 '''
                 
@@ -346,7 +346,8 @@ class DatabaseManager:
                         date_depense=row[4],
                         est_credit=bool(row[5]), # Conversion en booléen
                         effectue=bool(row[6]),   # Conversion en booléen
-                        emprunte=bool(row[7])    # Conversion en booléen
+                        emprunte=bool(row[7]),    # Conversion en booléen
+                        est_fixe=bool(row[8])
                     ))
                 return depenses
         except sqlite3.Error as e:
@@ -363,7 +364,7 @@ class DatabaseManager:
                 sql = '''
                     INSERT INTO depenses (
                         mois_id, nom, montant, categorie, 
-                        date_depense, est_credit, effectue, emprunte
+                        date_depense, est_credit, effectue, emprunte, est_fixe
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 '''
                 
@@ -376,7 +377,8 @@ class DatabaseManager:
                     depense.date_depense,
                     depense.est_credit,
                     depense.effectue,
-                    depense.emprunte
+                    depense.emprunte,
+                    depense.est_fixe
                 )
                 
                 cursor.execute(sql, values)
@@ -394,12 +396,12 @@ class DatabaseManager:
                 sql = '''
                     UPDATE depenses SET
                         nom = ?, montant = ?, categorie = ?, date_depense = ?,
-                        effectue = ?, emprunte = ?, est_credit = ?
+                        effectue = ?, emprunte = ?, est_credit = ?, est_fixe = ?
                     WHERE id = ?
                 '''
                 values = (
                     depense.nom, depense.montant, depense.categorie, depense.date_depense,
-                    depense.effectue, depense.emprunte, depense.est_credit,
+                    depense.effectue, depense.emprunte, depense.est_credit, depense.est_fixe,
                     depense.id
                 )
                 cursor.execute(sql, values)
@@ -494,12 +496,12 @@ class DatabaseManager:
                         sql = '''
                             INSERT INTO depenses (
                                 mois_id, nom, montant, categorie, date_depense, 
-                                est_credit, effectue, emprunte
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                est_credit, effectue, emprunte, est_fixe
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         '''
                         values = (
                             new_mois_id, depense.nom, depense.montant, depense.categorie,
-                            depense.date_depense, depense.est_credit, depense.effectue, depense.emprunte
+                            depense.date_depense, depense.est_credit, depense.effectue, depense.emprunte, depense.est_fixe
                         )
                         cursor.execute(sql, values)
                     

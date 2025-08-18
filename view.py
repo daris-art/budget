@@ -11,11 +11,21 @@ from PyQt6.QtWidgets import (
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
-from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent
-
+from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QWheelEvent
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class NoScrollComboBox(QComboBox):
+    """
+    Une QComboBox personnalisée qui ignore les événements de la molette de la souris
+    pour permettre le défilement du parent (par exemple, une QScrollArea).
+    """
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        # On ignore complètement l'événement de la molette.
+        # Qt le transmettra alors au widget parent pour qu'il le gère.
+        event.ignore()
 
 class BudgetView(QMainWindow):
     def __init__(self, controller):
@@ -125,6 +135,7 @@ class BudgetView(QMainWindow):
             "Nom (Z-A)": "nom_desc",
             "Payé d'abord": "effectue_desc",
             "Non payé d'abord": "effectue_asc",
+            "Dépenses fixes d'abord": "est_fixe_desc",
             "Type (revenus puis dépenses)": "type"
         }
         self.sort_combo.addItems(self.sort_options.keys())
@@ -139,7 +150,7 @@ class BudgetView(QMainWindow):
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()
-        headers = ["Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Actions"]
+        headers = ["Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Fixe", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
             
@@ -155,14 +166,15 @@ class BudgetView(QMainWindow):
             
             header_layout.addWidget(label, 0, i, alignment)
         
-        header_layout.setColumnStretch(0, 0)
-        header_layout.setColumnStretch(1, 6)
-        header_layout.setColumnStretch(2, 2)
-        header_layout.setColumnStretch(3, 2)
-        header_layout.setColumnStretch(4, 3)
-        header_layout.setColumnStretch(5, 1)
-        header_layout.setColumnStretch(6, 1)
-        header_layout.setColumnStretch(7, 1)
+        header_layout.setColumnStretch(0, 0)  # Type
+        header_layout.setColumnStretch(1, 6)  # Nom
+        header_layout.setColumnStretch(2, 2)  # Montant
+        header_layout.setColumnStretch(3, 2)  # Date
+        header_layout.setColumnStretch(4, 2)  # Catégorie (réduit de 3 à 2)
+        header_layout.setColumnStretch(5, 1)  # Payé
+        header_layout.setColumnStretch(6, 1)  # Prêt
+        header_layout.setColumnStretch(7, 1)  # Fixe (nouveau)
+        header_layout.setColumnStretch(8, 1)  # Actions (index décalé)
         main_layout.addLayout(header_layout)
 
         self.scroll_area = QScrollArea()
@@ -206,13 +218,16 @@ class BudgetView(QMainWindow):
         if not depense.date_depense:
             QTimer.singleShot(0, date_input.clear)
             
-        cat_combo = QComboBox()
+        cat_combo = NoScrollComboBox() 
         cat_combo.addItems(self.controller.model.categories)
         cat_combo.setCurrentText(depense.categorie)
         effectue_check = QCheckBox()
         effectue_check.setChecked(depense.effectue)
         emprunte_check = QCheckBox()
         emprunte_check.setChecked(depense.emprunte)
+        # --- AJOUT : Création de la CheckBox "Fixe" ---
+        fixe_check = QCheckBox()
+        fixe_check.setChecked(depense.est_fixe)
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
 
@@ -223,16 +238,18 @@ class BudgetView(QMainWindow):
         row_layout.addWidget(cat_combo, 0, 4)
         row_layout.addWidget(effectue_check, 0, 5, Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(emprunte_check, 0, 6, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(btn_supprimer_depense, 0, 7)
+        row_layout.addWidget(fixe_check, 0, 7, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(btn_supprimer_depense, 0, 8)
 
         row_layout.setColumnStretch(0, 0)
         row_layout.setColumnStretch(1, 6)
         row_layout.setColumnStretch(2, 2)
         row_layout.setColumnStretch(3, 2)
-        row_layout.setColumnStretch(4, 3)
+        row_layout.setColumnStretch(4, 2) # (réduit de 3 à 2)
         row_layout.setColumnStretch(5, 1)
         row_layout.setColumnStretch(6, 1)
-        row_layout.setColumnStretch(7, 1)
+        row_layout.setColumnStretch(7, 1) # (nouveau)
+        row_layout.setColumnStretch(8, 1) # (décalé)
 
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
@@ -240,6 +257,7 @@ class BudgetView(QMainWindow):
         cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        fixe_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
         montant_input.textChanged.connect(self.controller.handle_live_update)
         effectue_check.stateChanged.connect(self.controller.handle_live_update)
@@ -287,6 +305,7 @@ class BudgetView(QMainWindow):
                 "categorie": layout.itemAtPosition(0, 4).widget().currentText(),
                 "effectue": layout.itemAtPosition(0, 5).widget().isChecked(),
                 "emprunte": layout.itemAtPosition(0, 6).widget().isChecked(),
+                "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(), # <-- AJOUT
             }
         return {}
     

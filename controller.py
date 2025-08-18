@@ -279,10 +279,11 @@ class BudgetController:
         try:
             data = self.view.get_expense_data(index)
             if data:
+                # Le unpacking avec **data fonctionnera automatiquement
+                # car on a ajouté "est_fixe" au dictionnaire retourné par la vue.
                 result = self.model.update_expense(index, **data)
                 self._handle_result(result, show_success=False)
         except Exception as e:
-            # Ce bloc attrapera les erreurs comme les incohérences de nom de paramètre
             logger.error(f"Erreur critique lors de la tentative de mise à jour de la dépense {index}: {e}")
             self.view.show_error_message(f"Impossible de sauvegarder la dépense : {e}")
 
