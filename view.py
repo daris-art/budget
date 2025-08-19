@@ -111,6 +111,7 @@ class BudgetView(QMainWindow):
 
     def _create_salary_section(self) -> QGroupBox:
         group_box = QGroupBox("Salaire et Actions")
+        group_box.setObjectName("SalaryActionsGroup")
         layout = QHBoxLayout()
         
         layout.addWidget(QLabel("Salaire Mensuel (€):"))
@@ -187,9 +188,9 @@ class BudgetView(QMainWindow):
         self.scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(self.scroll_area)
         
-        btn_add_expense = QPushButton("➕ Ajouter une dépense")
-        btn_add_expense.clicked.connect(self.controller.handle_add_expense)
-        main_layout.addWidget(btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
+        self.btn_add_expense = QPushButton("➕ Ajouter une dépense")
+        self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
+        main_layout.addWidget(self.btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
 
         group_box.setLayout(main_layout)
         return group_box
@@ -288,13 +289,29 @@ class BudgetView(QMainWindow):
         return self.sort_options.get(current_text, "date_desc")
     
     def set_month_actions_enabled(self, enabled: bool):
-        group_box = self.findChild(QGroupBox, "MonthActionsGroup")
-        if group_box:
-            buttons_in_group = group_box.findChildren(QPushButton)
-            for button in buttons_in_group:
-                if button != self.btn_toggle_theme:
-                    button.setEnabled(enabled)
+        # Cible le premier groupe (Gestion du Mois) par son nom
+        month_group = self.findChild(QGroupBox, "MonthActionsGroup")
+        if month_group:
+            month_group.setEnabled(enabled)
+
+        # Cible le second groupe (Salaire et Actions) par son nouveau nom
+        salary_group = self.findChild(QGroupBox, "SalaryActionsGroup")
+        if salary_group:
+            salary_group.setEnabled(enabled)
     
+        # Désactiver/Réactiver la ComboBox de sélection du mois
+        if month_group:
+            self.mois_selector_combo.setEnabled(enabled)
+
+        # Bouton "Ajouter une dépense"
+        if hasattr(self, 'btn_add_expense'):
+            self.btn_add_expense.setEnabled(enabled)
+        
+        # Bouton "Voir Graphiques"
+        if hasattr(self, 'btn_voir_graphiques'):
+            self.btn_voir_graphiques.setEnabled(enabled)
+
+
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):
             layout = self.expense_rows[index].layout()
@@ -308,12 +325,19 @@ class BudgetView(QMainWindow):
                 "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(), # <-- AJOUT
             }
         return {}
-    
+
     def _create_summary_section(self) -> QGroupBox:
         group_box = QGroupBox("Récapitulatif")
         main_layout = QHBoxLayout()
+
+        # --- Conteneur pour la partie gauche (Totaux + Bouton Graphiques) ---
+        left_container = QWidget()
+        left_layout = QHBoxLayout(left_container)
+
+        # Création des colonnes de totaux
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
+        
         summary_items = {
             "nombre_depenses": "Nombre de Dépenses:",
             "total_depenses": "Total des Dépenses:",
@@ -336,23 +360,71 @@ class BudgetView(QMainWindow):
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             self.summary_labels[key] = value_label
             right_form_layout.addRow(label, value_label)
-        main_layout.addLayout(left_form_layout)
+
+        left_layout.addLayout(left_form_layout)
         separator1 = QFrame()
         separator1.setFrameShape(QFrame.Shape.VLine)
         separator1.setFrameShadow(QFrame.Shadow.Sunken)
-        main_layout.addWidget(separator1)
-        main_layout.addLayout(right_form_layout)
+        left_layout.addWidget(separator1)
+        left_layout.addLayout(right_form_layout)
+
         separator2 = QFrame()
         separator2.setFrameShape(QFrame.Shape.VLine)
         separator2.setFrameShadow(QFrame.Shadow.Sunken)
-        main_layout.addWidget(separator2)
-        btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
-        btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
-        btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
-        main_layout.addWidget(btn_voir_graphiques)
+        left_layout.addWidget(separator2)
+
+        self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
+        self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
+        self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
+        
+        # --- MODIFICATION 1 : Centrer le bouton verticalement ---
+        left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # --- Ajout des éléments au layout principal ---
+        main_layout.addWidget(left_container)
         main_layout.addStretch()
+
+        separator3 = QFrame()
+        separator3.setFrameShape(QFrame.Shape.VLine)
+        separator3.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator3)
+
+        # --- Conteneur pour le Bitcoin (partie droite) ---
+        btc_container = QWidget()
+        btc_layout = QVBoxLayout(btc_container)
+        btc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        btc_title_label = QLabel("<b>Cours du Bitcoin</b>")
+        btc_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.btc_price_label = QLabel("N/A")
+        self.btc_price_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        self.btc_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.btn_refresh_btc = QPushButton("🔄")
+        self.btn_refresh_btc.setToolTip("Mettre à jour le cours du Bitcoin")
+        
+        # --- MODIFICATION 2 : Agrandir le bouton et l'icône ---
+        self.btn_refresh_btc.setFixedSize(50, 50)
+        font = self.btn_refresh_btc.font()
+        font.setPointSize(16)
+        self.btn_refresh_btc.setFont(font)
+        
+        btc_layout.addWidget(btc_title_label)
+        btc_layout.addWidget(self.btc_price_label)
+        btc_layout.addWidget(self.btn_refresh_btc, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        main_layout.addWidget(btc_container)
+
         group_box.setLayout(main_layout)
         return group_box
+    
+    # Ajoutez cette nouvelle méthode à la classe BudgetView
+    def update_bitcoin_price(self, price_text: str, tooltip_text: str):
+        """Met à jour le label affichant le prix du Bitcoin."""
+        self.btc_price_label.setText(price_text)
+        self.btc_price_label.setToolTip(tooltip_text)
+
 
     def _create_status_bar(self):
         self.status_bar = self.statusBar()

@@ -11,6 +11,21 @@ from graph_view import GraphDialog
 
 logger = logging.getLogger(__name__)
 
+class BitcoinPriceWorker(QObject):
+    """Worker qui récupère le prix du BTC dans un thread séparé."""
+    finished = pyqtSignal(Result)
+
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def run(self):
+        """Exécute la tâche de récupération du prix."""
+        logger.info("Le worker BTC démarre...")
+        result = self.model.get_bitcoin_price()
+        self.finished.emit(result)
+        logger.info("Le worker BTC a terminé.")
+
 
 # --- AJOUT : Classe "Worker" pour l'import en arrière-plan ---
 class ExcelImportWorker(QObject):
@@ -58,10 +73,16 @@ class BudgetController:
         # On garde une référence au thread pour éviter qu'il soit supprimé par erreur
         self.import_thread = None
         self.import_worker = None
+        self.btc_thread = None # <-- AJOUT
+        self.btc_worker = None # <-- AJOUT
 
     def set_view(self, view):
         """Associe la vue à ce contrôleur."""
         self.view = view
+        # --- AJOUT : Connecter le nouveau bouton de rafraîchissement ---
+        if hasattr(self.view, 'btn_refresh_btc'):
+            self.view.btn_refresh_btc.clicked.connect(self.handle_fetch_bitcoin_price)
+
 
     def start_application(self):
         """Démarre l'application."""
@@ -73,6 +94,44 @@ class BudgetController:
         self._refresh_mois_list()
         result = self.model.load_data_from_last_session()
         self._handle_result(result, show_success=False)
+
+        # --- AJOUT : Lancer la récupération du prix au démarrage ---
+        self.handle_fetch_bitcoin_price()
+
+    # Ajoutez ces trois nouvelles méthodes à la classe BudgetController
+    def handle_fetch_bitcoin_price(self):
+        """Gère la récupération du prix du BTC en utilisant un QThread."""
+        # On met à jour l'UI pour montrer que le chargement est en cours
+        self.view.update_bitcoin_price("Chargement...", "Récupération en cours...")
+        self.view.btn_refresh_btc.setEnabled(False) # On désactive le bouton pendant le chargement
+
+        self.btc_thread = QThread()
+        self.btc_worker = BitcoinPriceWorker(self.model)
+        self.btc_worker.moveToThread(self.btc_thread)
+        
+        self.btc_thread.started.connect(self.btc_worker.run)
+        self.btc_worker.finished.connect(self._on_bitcoin_price_fetched)
+        
+        # Nettoyage automatique du thread et du worker
+        self.btc_worker.finished.connect(self.btc_thread.quit)
+        self.btc_worker.finished.connect(self.btc_worker.deleteLater)
+        self.btc_thread.finished.connect(self.btc_thread.deleteLater)
+
+        self.btc_thread.start()
+
+    def _on_bitcoin_price_fetched(self, result: Result):
+        """Slot qui gère le résultat une fois la récupération du prix terminée."""
+        if result.is_success:
+            price = result.data
+            price_str = f"{price:,.2f} €".replace(",", " ")
+            tooltip = f"Dernière mise à jour le {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}"
+            self.view.update_bitcoin_price(price_str, tooltip)
+        else:
+            self.view.update_bitcoin_price("Erreur", result.error)
+        
+        # On réactive le bouton de rafraîchissement quoi qu'il arrive
+        self.view.btn_refresh_btc.setEnabled(True)
+
     
     def handle_import_from_excel(self):
         """Gère l'import depuis un fichier Excel en utilisant un QThread."""

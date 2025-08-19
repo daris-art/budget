@@ -4,6 +4,7 @@ from pathlib import Path
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
+import requests
 
 
 from utils import (
@@ -38,6 +39,39 @@ class BudgetModel(Observable):
     def get_nombre_depenses(self) -> int:
         """Retourne le nombre total de dépenses pour le mois actuel."""
         return len(self._depenses)
+    
+    def get_bitcoin_price(self) -> Result:
+        """
+        Récupère le prix actuel du Bitcoin en Euros via l'API CoinGecko.
+        """
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "bitcoin",
+            "vs_currencies": "eur"
+        }
+        try:
+            # On met un timeout pour ne pas attendre indéfiniment
+            response = requests.get(url, params=params, timeout=10)
+            # Lève une exception si la requête a échoué (ex: erreur 404, 500)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # On extrait le prix de la réponse JSON : {"bitcoin":{"eur":60000.12}}
+            price = data.get("bitcoin", {}).get("eur")
+            
+            if price is None:
+                return Result.error("Format de réponse de l'API inattendu.")
+            
+            return Result.success(data=price)
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erreur réseau lors de la récupération du prix du BTC: {e}")
+            return Result.error("Erreur réseau. Vérifiez votre connexion.")
+        except Exception as e:
+            logger.error(f"Erreur inattendue lors de la récupération du prix du BTC: {e}")
+            return Result.error("Une erreur inattendue est survenue.")
+
 
     # --- CORRECTION 2 : Suppression par ID ---
     def remove_expense_by_id(self, depense_id: int) -> Result:
