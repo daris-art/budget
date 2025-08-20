@@ -243,27 +243,44 @@ class BudgetController:
             self.view.hide_progress_bar()
             self.view.set_month_actions_enabled(True)
 
+    # Dans controller.py, remplacez entièrement la méthode handle_live_update
+
     def handle_live_update(self):
-        """Met à jour le récapitulatif en direct."""
-        if not self.view or not self.model.mois_actuel: return
+        """
+        Met à jour le récapitulatif en direct en se basant sur les données
+        actuellement affichées dans la vue.
+        """
+        if not self.view or not self.model.mois_actuel:
+            return
+
         try:
             salaire_str = self.view.salaire_input.text().replace(',', '.')
             salaire = float(salaire_str) if salaire_str.strip() and salaire_str.strip() != '-' else 0.0
+
             total_depenses = 0.0
             total_effectue = 0.0
             total_emprunte = 0.0
             nombre_depenses = 0
+            # --- AJOUTS ---
+            total_revenus = 0.0
+            total_depenses_fixes = 0.0
+
             for i in range(len(self.view.expense_rows)):
                 data = self.view.get_expense_data(i)
-                if not data.get('est_credit'): # On ne compte que les débits
+                montant_str = data['montant_str'].replace(',', '.')
+                montant = float(montant_str) if montant_str.strip() and montant_str.strip() != '-' else 0.0
+
+                if data['est_credit']:
+                    total_revenus += montant
+                else: # C'est une dépense
                     nombre_depenses += 1
-                    montant_str = data['montant_str'].replace(',', '.')
-                    montant = float(montant_str) if montant_str.strip() and montant_str.strip() != '-' else 0.0
                     total_depenses += montant
                     if data['effectue']:
                         total_effectue += montant
                     if data['emprunte']:
                         total_emprunte += montant
+                    if data['est_fixe']:
+                        total_depenses_fixes += montant
             
             summary_data = {
                 "nombre_depenses": nombre_depenses,
@@ -271,11 +288,16 @@ class BudgetController:
                 "argent_restant": salaire - total_depenses,
                 "total_effectue": total_effectue,
                 "total_non_effectue": total_depenses - total_effectue,
-                "total_emprunte": total_emprunte
+                "total_emprunte": total_emprunte,
+                # --- AJOUTS ---
+                "total_revenus": total_revenus,
+                "total_depenses_fixes": total_depenses_fixes
             }
             self.view.update_summary_display(summary_data)
+
         except (ValueError, TypeError, KeyError) as e:
             logger.debug(f"Erreur non bloquante pendant la mise à jour en direct : {e}")
+            pass
 
     def handle_toggle_theme(self):
         """Bascule entre le thème clair et le thème sombre."""

@@ -26,14 +26,14 @@ class BudgetModel(Observable):
         self._depenses: List[Depense] = []
         self.categories = ["Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
     
-    def get_bitcoin_price(self) -> Result:
-        """Délègue l'appel API au service concerné."""
-        return self._api_service.get_price()
-    
     def get_nombre_depenses(self) -> int:
         """Retourne le nombre total de dépenses pour le mois actuel."""
         return len(self._depenses)
     
+    def get_bitcoin_price(self) -> Result:
+        """Délègue l'appel API au service concerné."""
+        return self._api_service.get_price()
+       
     def get_bitcoin_price(self) -> Result:
         """
         Récupère le prix actuel du Bitcoin en Euros via l'API CoinGecko.
@@ -65,6 +65,14 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.error(f"Erreur inattendue lors de la récupération du prix du BTC: {e}")
             return Result.error("Une erreur inattendue est survenue.")
+
+    def get_total_revenus(self) -> float:
+        """Retourne le total des revenus (opérations de crédit)."""
+        return sum(d.montant for d in self._depenses if d.est_credit)
+
+    def get_total_depenses_fixes(self) -> float:
+        """Retourne le total des dépenses marquées comme fixes."""
+        return sum(d.montant for d in self._depenses if not d.est_credit and d.est_fixe)
 
 
     # --- CORRECTION 2 : Suppression par ID ---
@@ -500,13 +508,27 @@ class BudgetModel(Observable):
             argent_restant=self.salaire - total_depenses,
             total_effectue=total_effectue,
             total_non_effectue=total_depenses - total_effectue,
-            total_emprunte=self.get_total_emprunte()
+            total_emprunte=self.get_total_emprunte(),
+            total_revenus=self.get_total_revenus(),
+            total_depenses_fixes=self.get_total_depenses_fixes()
         )
     
-    # Dans model.py, à l'intérieur de la classe BudgetModel
-
-    # Dans model.py, à l'intérieur de la classe BudgetModel
-
+    def get_summary_data(self) -> Dict[str, float]:
+        """
+        Retourne un dictionnaire avec toutes les données agrégées
+        pour le récapitulatif.
+        """
+        return {
+            "nombre_depenses": self.get_nombre_depenses(),
+            "total_depenses": self.get_total_depenses(),
+            "argent_restant": self.get_argent_restant(),
+            "total_effectue": self.get_total_depenses_effectuees(),
+            "total_non_effectue": self.get_total_depenses_non_effectuees(),
+            "total_emprunte": self.get_total_emprunte(),
+            "total_revenus": self.get_total_revenus(),
+            "total_depenses_fixes": self.get_total_depenses_fixes()
+        }
+    
     def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float]]:
         """
         Prépare les données pour les graphiques en excluant les crédits (revenus)

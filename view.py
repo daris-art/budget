@@ -31,9 +31,28 @@ class BudgetView(QMainWindow):
         
         self._init_ui()
 
+    # Dans view.py, remplacez la méthode _init_ui
+
     def _init_ui(self):
         self.setWindowTitle("Application de Budget (PyQt6)")
-        self.setGeometry(100, 100, 950, 750)
+
+        # --- MODIFICATION : Calcul de la géométrie dynamique ---
+        # 1. On récupère les informations de l'écran principal
+        screen = QApplication.primaryScreen()
+        
+        # 2. On utilise availableGeometry() pour avoir la taille SANS la barre des tâches
+        available_geometry = screen.availableGeometry()
+        screen_height = available_geometry.height()
+        screen_width = available_geometry.width()
+
+        # 3. On définit la largeur souhaitée et on calcule la position pour centrer la fenêtre
+        app_width = 950
+        pos_x = (screen_width - app_width) // 2
+        pos_y = available_geometry.y() # Positionne la fenêtre en haut de l'espace disponible
+
+        # 4. On applique la nouvelle géométrie
+        self.setGeometry(pos_x, pos_y, app_width, screen_height)
+        # L'ancienne ligne "self.setGeometry(100, 100, 950, 750)" est maintenant remplacée.
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -325,16 +344,17 @@ class BudgetView(QMainWindow):
         group_box = QGroupBox("Récapitulatif")
         main_layout = QHBoxLayout()
 
-        # --- Conteneur pour la partie gauche (Totaux + Bouton Graphiques) ---
+        # --- Conteneur pour toute la partie gauche (Tout sauf le Bitcoin) ---
         left_container = QWidget()
         left_layout = QHBoxLayout(left_container)
 
-        # Création des colonnes de totaux
+        # Création des colonnes de totaux principaux
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
         
+        # --- MODIFICATION : On déplace "total_revenus" ici ---
         summary_items = {
-            "nombre_depenses": "Nombre de Dépenses:",
+            "total_revenus": "Total des Revenus:",
             "total_depenses": "Total des Dépenses:",
             "argent_restant": "Argent Restant:",
             "total_effectue": "Dépenses Réglées:",
@@ -345,7 +365,8 @@ class BudgetView(QMainWindow):
         mid_point = (len(items) + 1) // 2
         for key, text in items[:mid_point]:
             label = QLabel(text)
-            value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
+            # La condition pour "nombre_depenses" n'est plus utile ici
+            value_label = QLabel("0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             self.summary_labels[key] = value_label
             left_form_layout.addRow(label, value_label)
@@ -357,58 +378,62 @@ class BudgetView(QMainWindow):
             right_form_layout.addRow(label, value_label)
 
         left_layout.addLayout(left_form_layout)
-        separator1 = QFrame()
-        separator1.setFrameShape(QFrame.Shape.VLine)
-        separator1.setFrameShadow(QFrame.Shadow.Sunken)
+        separator1 = QFrame(); separator1.setFrameShape(QFrame.Shape.VLine); separator1.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator1)
         left_layout.addLayout(right_form_layout)
 
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.Shape.VLine)
-        separator2.setFrameShadow(QFrame.Shadow.Sunken)
+        # --- Section pour les totaux supplémentaires ---
+        separator2 = QFrame(); separator2.setFrameShape(QFrame.Shape.VLine); separator2.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator2)
+
+        extra_summary_layout = QFormLayout()
+        # --- MODIFICATION : On déplace "nombre_depenses" ici ---
+        extra_items = {
+            "nombre_depenses": "Nombre de Dépenses:",
+            "total_depenses_fixes": "Total Dépenses Fixes:"
+        }
+        for key, text in extra_items.items():
+            label = QLabel(text)
+            # --- MODIFICATION : On déplace la condition pour le formatage sans décimales ici ---
+            value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
+            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            self.summary_labels[key] = value_label
+            extra_summary_layout.addRow(label, value_label)
+        
+        left_layout.addLayout(extra_summary_layout)
+
+        # --- Le reste de la fonction est inchangé ---
+        separator3 = QFrame(); separator3.setFrameShape(QFrame.Shape.VLine); separator3.setFrameShadow(QFrame.Shadow.Sunken)
+        left_layout.addWidget(separator3)
 
         self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
         self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
-        
-        # --- MODIFICATION 1 : Centrer le bouton verticalement ---
         left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
-
-        # --- Ajout des éléments au layout principal ---
+        
         main_layout.addWidget(left_container)
         main_layout.addStretch()
 
-        separator3 = QFrame()
-        separator3.setFrameShape(QFrame.Shape.VLine)
-        separator3.setFrameShadow(QFrame.Shadow.Sunken)
-        main_layout.addWidget(separator3)
-
-        # --- Conteneur pour le Bitcoin (partie droite) ---
+        separator_btc = QFrame(); separator_btc.setFrameShape(QFrame.Shape.VLine); separator_btc.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(separator_btc)
+        
         btc_container = QWidget()
         btc_layout = QVBoxLayout(btc_container)
         btc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         btc_title_label = QLabel("<b>Cours du Bitcoin</b>")
         btc_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         self.btc_price_label = QLabel("N/A")
-        self.btc_price_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.btc_price_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         self.btc_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         self.btn_refresh_btc = QPushButton("🔄")
         self.btn_refresh_btc.setToolTip("Mettre à jour le cours du Bitcoin")
-        
-        # --- MODIFICATION 2 : Agrandir le bouton et l'icône ---
-        self.btn_refresh_btc.setFixedSize(55, 26)
+        self.btn_refresh_btc.setFixedSize(65, 24)
         font = self.btn_refresh_btc.font()
         font.setPointSize(16)
         self.btn_refresh_btc.setFont(font)
-        
         btc_layout.addWidget(btc_title_label)
         btc_layout.addWidget(self.btc_price_label)
         btc_layout.addWidget(self.btn_refresh_btc, 0, Qt.AlignmentFlag.AlignCenter)
-        
         main_layout.addWidget(btc_container)
 
         group_box.setLayout(main_layout)
@@ -508,6 +533,8 @@ class BudgetView(QMainWindow):
             "total_effectue": display_data.total_effectue,
             "total_non_effectue": display_data.total_non_effectue,
             "total_emprunte": display_data.total_emprunte,
+            "total_revenus": display_data.total_revenus,
+            "total_depenses_fixes": display_data.total_depenses_fixes
         }
         self.update_summary_display(summary)
 
