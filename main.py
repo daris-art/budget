@@ -1,39 +1,47 @@
-# main.py (version mise à jour pour PyQt6)
+# main.py
 
 import sys
 import logging
-
-# On importe les composants nécessaires
 from PyQt6.QtWidgets import QApplication
-from model import BudgetModel
+
+# Import des composants de la nouvelle structure
+from core.model import BudgetModel
 from controller import BudgetController
-from view import BudgetView # Assurez-vous d'utiliser le view.py de PyQt6
+from view import BudgetView
+from core.database import DatabaseManager
+from core.validation import DataValidator
+from core.services import ImportExportService, BitcoinAPIService
 
 def main():
     """Point d'entrée principal de l'application."""
-    # Configuration du logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
     
-    # 1. Création de l'instance de l'application PyQt
     app = QApplication(sys.argv)
 
-    # 2. Initialisation du MVC
-    model = BudgetModel()
+    # 1. Initialisation des composants du backend (core)
+    db_manager = DatabaseManager()
+    validator = DataValidator()
+    import_export_service = ImportExportService(db_manager)
+    api_service = BitcoinAPIService()
+
+    # 2. Injection des dépendances dans le modèle
+    model = BudgetModel(
+        db_manager=db_manager,
+        validator=validator,
+        import_export_service=import_export_service,
+        api_service=api_service
+    )
+
+    # 3. Initialisation du reste du MVC
     controller = BudgetController(model)
     view = BudgetView(controller)
-    
-    # 3. Lier la vue au contrôleur
     controller.set_view(view) 
 
-    # 4. Démarrage de la logique de l'application (charge les données et applique le thème)
+    # 4. Démarrage
     controller.start_application()
-
-    # 5. Affichage de la fenêtre principale
     view.show()
     
-    # 6. Lancement de la boucle principale de l'application
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()

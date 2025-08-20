@@ -1,41 +1,35 @@
-# model.py (version mise à jour)
+# core/model.py
 
-from pathlib import Path
 import logging
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Tuple, Dict
 from datetime import datetime
 import requests
-
-
-from utils import (
-    DatabaseManager, DataValidator, ImportExportService, Result,
-    Depense, Mois, MoisDisplayData, Observable, DatabaseError
-)
+from pathlib import Path 
+# Imports depuis la nouvelle structure
+from core.data_models import *
+from core.database import DatabaseManager
+from core.validation import DataValidator
+from core.services import ImportExportService, BitcoinAPIService
 
 logger = logging.getLogger(__name__)
 
 class BudgetModel(Observable):
-    """
-    Responsable uniquement de la logique métier de l'application de budget.
-    """
-    def __init__(self):
+    def __init__(self, db_manager: DatabaseManager, validator: DataValidator, 
+                 import_export_service: ImportExportService, api_service: BitcoinAPIService):
         super().__init__()
-        # On utilise expanduser() pour résoudre le '~' et trouver le dossier personnel
-        app_dir = Path.home() / ".BudgetApp"
-        # On s'assure que le dossier existe
-        app_dir.mkdir(parents=True, exist_ok=True)
-        self.db_path = app_dir / "budget.db"
-
-        self._db_manager: Optional[DatabaseManager] = None
-        self._validator: Optional[DataValidator] = None
-        self._import_export_service: Optional[ImportExportService] = None
+        self._db_manager = db_manager
+        self._validator = validator
+        self._import_export_service = import_export_service
+        self._api_service = api_service
 
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
         self.categories = ["Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
-
-        logger.info("BudgetModel instancié (backend non initialisé)")
-
+    
+    def get_bitcoin_price(self) -> Result:
+        """Délègue l'appel API au service concerné."""
+        return self._api_service.get_price()
+    
     def get_nombre_depenses(self) -> int:
         """Retourne le nombre total de dépenses pour le mois actuel."""
         return len(self._depenses)

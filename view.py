@@ -13,19 +13,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
 from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QWheelEvent
 import logging
+from ui.custom_widgets import NoScrollComboBox
 
 logger = logging.getLogger(__name__)
-
-
-class NoScrollComboBox(QComboBox):
-    """
-    Une QComboBox personnalisée qui ignore les événements de la molette de la souris
-    pour permettre le défilement du parent (par exemple, une QScrollArea).
-    """
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        # On ignore complètement l'événement de la molette.
-        # Qt le transmettra alors au widget parent pour qu'il le gère.
-        event.ignore()
 
 class BudgetView(QMainWindow):
     def __init__(self, controller):
@@ -583,3 +573,4 @@ class BudgetView(QMainWindow):
         """Ferme la fenêtre si la touche 'Échap' est pressée."""
         if event.key() == Qt.Key.Key_Escape:
             self.close()
+            
