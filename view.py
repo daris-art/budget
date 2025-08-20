@@ -301,6 +301,11 @@ class BudgetView(QMainWindow):
         if hasattr(self, 'btn_voir_graphiques'):
             self.btn_voir_graphiques.setEnabled(enabled)
 
+        # On désactive le conteneur de la liste des dépenses, ce qui désactive
+        # TOUS ses enfants 
+        if hasattr(self, 'expenses_container'):
+            self.expenses_container.setEnabled(enabled)
+
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):
@@ -388,14 +393,14 @@ class BudgetView(QMainWindow):
         btc_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.btc_price_label = QLabel("N/A")
-        self.btc_price_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        self.btc_price_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.btc_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.btn_refresh_btc = QPushButton("🔄")
         self.btn_refresh_btc.setToolTip("Mettre à jour le cours du Bitcoin")
         
         # --- MODIFICATION 2 : Agrandir le bouton et l'icône ---
-        self.btn_refresh_btc.setFixedSize(50, 50)
+        self.btn_refresh_btc.setFixedSize(55, 26)
         font = self.btn_refresh_btc.font()
         font.setPointSize(16)
         self.btn_refresh_btc.setFont(font)
@@ -573,4 +578,3 @@ class BudgetView(QMainWindow):
         """Ferme la fenêtre si la touche 'Échap' est pressée."""
         if event.key() == Qt.Key.Key_Escape:
             self.close()
-            
