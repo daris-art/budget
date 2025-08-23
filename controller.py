@@ -370,6 +370,11 @@ class BudgetController:
             self._refresh_summary_view()
         elif event_type == 'expenses_sorted':
             self._refresh_complete_view()
+        elif event_type == 'expenses_redisplayed':
+            # La vue est notifiée qu'il faut redessiner la liste des dépenses
+            self.view.refresh_expense_list(data)
+            # On met aussi à jour le résumé car le nombre de lignes affichées a pu changer
+            self._refresh_summary_view() 
 
     # --- MÉTHODES PRIVÉES ---
 
@@ -424,3 +429,12 @@ class BudgetController:
             if result.error:
                 self.view.show_error_message(result.error)
                 self.view.update_status_bar(f"Erreur: {result.error}", is_error=True)
+
+    # --- NOUVEAU HANDLER POUR LA RECHERCHE ---
+    def handle_search_expenses(self, search_text: str):
+        """
+        Appelé à chaque fois que le texte dans le champ de recherche change.
+        """
+        self.model.filter_depenses_by_name(search_text)
+
+    

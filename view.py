@@ -169,6 +169,36 @@ class BudgetView(QMainWindow):
 
         group_box.setLayout(layout)
         return group_box
+    
+    # --- NOUVELLE MÉTHODE POUR RAFRAÎCHIR LA LISTE ---
+    def refresh_expense_list(self, expenses_to_display: List[Any]):
+        """Vide et repeuple la liste des dépenses avec les données fournies."""
+        self.clear_all_expenses()
+        for i, depense in enumerate(expenses_to_display):
+            self.add_expense_widget(depense, i)
+        
+        # S'assure que l'UI est fluide même avec beaucoup d'éléments
+        QApplication.processEvents()
+
+    # --- MODIFICATION DE update_complete_display ---
+    def update_complete_display(self, display_data: Any):
+        self.update_salary_display(display_data.salaire)
+        
+        # On utilise maintenant la nouvelle méthode pour afficher les dépenses
+        self.refresh_expense_list(display_data.depenses)
+        
+        summary = {
+            "nombre_depenses": display_data.nombre_depenses,
+            "total_depenses": display_data.total_depenses,
+            "argent_restant": display_data.argent_restant,
+            "total_effectue": display_data.total_effectue,
+            "total_non_effectue": display_data.total_non_effectue,
+            "total_emprunte": display_data.total_emprunte,
+            "total_revenus": display_data.total_revenus,
+            "total_depenses_fixes": display_data.total_depenses_fixes
+        }
+        self.update_summary_display(summary)
+
 
     def _create_salary_section(self) -> QGroupBox:
         group_box = QGroupBox("Salaire et Actions")
@@ -183,6 +213,17 @@ class BudgetView(QMainWindow):
         self.salaire_input.editingFinished.connect(self.controller.handle_set_salaire)
         self.salaire_input.textChanged.connect(self.controller.handle_live_update)
         layout.addWidget(self.salaire_input)
+
+
+        # --- AJOUT DU CHAMP DE RECHERCHE ---
+        layout.addWidget(QLabel("Rechercher :"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filtrer par nom...")
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.setFixedWidth(180)
+        # On connecte le signal de changement de texte au contrôleur
+        self.search_input.textChanged.connect(self.controller.handle_search_expenses)
+        layout.addWidget(self.search_input)
         
         layout.addStretch()
         

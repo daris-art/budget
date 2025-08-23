@@ -24,8 +24,68 @@ class BudgetModel(Observable):
 
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
+        self._current_sort_key: str = "date_desc"
         self.categories = ["Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
     
+    # --- NOUVELLE MÉTHODE PUBLIQUE ---
+    def filter_depenses_by_name(self, search_text: str):
+        """Met à jour le terme de recherche et rafraîchit la liste affichée."""
+        self._current_search_term = search_text.lower()
+        self._refresh_displayed_expenses()
+
+    # Dans model.py, à l'intérieur de la classe BudgetModel
+
+    def _refresh_displayed_expenses(self):
+        """
+        Applique le filtre et le tri actuels à la liste des dépenses
+        et notifie la vue pour qu'elle se mette à jour.
+        C'est la méthode centrale pour tout rafraîchissement de la liste.
+        """
+        # 1. Filtrage basé sur le terme de recherche
+        if self._current_search_term:
+            # On filtre la liste source (_depenses)
+            temp_list = [
+                d for d in self._depenses 
+                if self._current_search_term in d.nom.lower()
+            ]
+        else:
+            # Si la recherche est vide, on prend une copie de la liste complète
+            temp_list = self._depenses.copy()
+
+        # 2. Tri de la liste (filtrée ou non)
+        sort_key = self._current_sort_key
+        try:
+            if sort_key == "montant_desc":
+                temp_list.sort(key=lambda d: d.montant, reverse=True)
+            elif sort_key == "montant_asc":
+                temp_list.sort(key=lambda d: d.montant)
+            elif sort_key == "date_desc":
+                temp_list.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
+            elif sort_key == "date_asc":
+                temp_list.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'))
+            elif sort_key == "nom_asc":
+                temp_list.sort(key=lambda d: d.nom.lower())
+            elif sort_key == "nom_desc":
+                temp_list.sort(key=lambda d: d.nom.lower(), reverse=True)
+            elif sort_key == "effectue_desc":
+                temp_list.sort(key=lambda d: d.effectue, reverse=True)
+            elif sort_key == "effectue_asc":
+                temp_list.sort(key=lambda d: d.effectue)
+            elif sort_key == "est_fixe_desc":
+                temp_list.sort(key=lambda d: d.est_fixe, reverse=True)
+            elif sort_key == "type":
+                temp_list.sort(key=lambda d: (not d.est_credit, d.nom))
+            else: # Tri par défaut
+                temp_list.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Erreur de tri lors du rafraîchissement: {e}")
+
+        # 3. Mise à jour de la liste qui sera affichée
+        self._displayed_depenses = temp_list
+        
+        # 4. Notification à la vue pour qu'elle se redessine avec la nouvelle liste
+        self.notify_observers('expenses_redisplayed', self._displayed_depenses)
+
     def get_nombre_depenses(self) -> int:
         """Retourne le nombre total de dépenses pour le mois actuel."""
         return len(self._depenses)
@@ -94,6 +154,8 @@ class BudgetModel(Observable):
                 self._depenses.pop(index_to_remove)
                 # On notifie la vue pour qu'elle supprime la bonne ligne
                 self.notify_observers('expense_removed', {'index': index_to_remove})
+
+            self._refresh_displayed_expenses() # Rafraîchit l'affichage
             
             return Result.success()
         except DatabaseError as e:
@@ -169,6 +231,10 @@ class BudgetModel(Observable):
             
             self.mois_actuel = mois
             self._depenses = depenses
+
+            self._current_search_term = "" # On réinitialise la recherche
+            self._refresh_displayed_expenses() # On met à jour l'affichage
+        
             
             self._save_last_mois(nom)
             self.notify_observers('mois_loaded', self.mois_actuel)
@@ -340,6 +406,8 @@ class BudgetModel(Observable):
             depense.id = depense_id
             
             self._depenses.append(depense)
+
+            self._refresh_displayed_expenses() # Rafraîchit l'affichage
             
             self.notify_observers('expense_added', depense)
             return Result.success("Dépense ajoutée")
@@ -406,48 +474,10 @@ class BudgetModel(Observable):
     # Dans model.py, remplacez la méthode sort_depenses
 
     def sort_depenses(self, sort_key: str) -> Result:
-        """Trie la liste des dépenses en mémoire selon la clé fournie."""
-        if not self.mois_actuel:
-            return Result.error("Aucun mois n'est chargé.")
-
-        try:
-            if sort_key == "montant_desc":
-                self._depenses.sort(key=lambda d: d.montant, reverse=True)
-            elif sort_key == "montant_asc":
-                self._depenses.sort(key=lambda d: d.montant)
-            elif sort_key == "date_desc":
-                # Pour trier les dates au format JJ/MM/AAAA, il faut les convertir
-                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
-            elif sort_key == "date_asc":
-                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'))
-            elif sort_key == "nom_asc":
-                # On trie par le nom en minuscules pour un tri alphabétique insensible à la casse
-                self._depenses.sort(key=lambda d: d.nom.lower())
-            elif sort_key == "nom_desc":
-                self._depenses.sort(key=lambda d: d.nom.lower(), reverse=True)
-            elif sort_key == "effectue_desc":
-                # Trie pour que les dépenses effectuées (True) apparaissent en premier
-                self._depenses.sort(key=lambda d: d.effectue, reverse=True)
-            elif sort_key == "effectue_asc":
-                # Trie pour que les dépenses non effectuées (False) apparaissent en premier
-                self._depenses.sort(key=lambda d: d.effectue)
-
-            elif sort_key == "est_fixe_desc":
-                # Trie pour que les dépenses fixes (True) apparaissent en premier
-                self._depenses.sort(key=lambda d: d.est_fixe, reverse=True)
-            elif sort_key == "type":
-                # Trie par crédit (True=1) puis par débit (False=0), puis par nom
-                self._depenses.sort(key=lambda d: (not d.est_credit, d.nom))
-            else: # Tri par défaut
-                self._depenses.sort(key=lambda d: datetime.strptime(d.date_depense, '%d/%m/%Y'), reverse=True)
-
-            # Une fois la liste triée, on notifie la vue pour qu'elle se redessine
-            self.notify_observers('expenses_sorted', None)
-            return Result.success()
-        except ValueError as e:
-            # Gère le cas où une date aurait un format incorrect
-            logger.error(f"Erreur de tri, format de date invalide: {e}")
-            return Result.error("Certaines dates ont un format invalide et ne peuvent être triées.")
+        """Met à jour la clé de tri et rafraîchit la liste."""
+        self._current_sort_key = sort_key
+        self._refresh_displayed_expenses()
+        return Result.success()
             
     def clear_all_expenses(self) -> Result:
         """Supprime toutes les dépenses du mois actuel"""
@@ -502,8 +532,8 @@ class BudgetModel(Observable):
         return MoisDisplayData(
             nom=self.mois_actuel.nom,
             salaire=self.salaire,
-            depenses=self._depenses,
             nombre_depenses=len(self._depenses), # <-- Ajout ici
+            depenses=self._displayed_depenses, 
             total_depenses=total_depenses,
             argent_restant=self.salaire - total_depenses,
             total_effectue=total_effectue,
