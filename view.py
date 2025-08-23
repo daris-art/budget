@@ -17,6 +17,73 @@ from ui.custom_widgets import NoScrollComboBox
 
 logger = logging.getLogger(__name__)
 
+# --- NOUVELLE CLASSE POUR GÉRER LA NAVIGATION ---
+class ExpenseScrollArea(QScrollArea):
+    """
+    QScrollArea personnalisée qui prend le contrôle des touches fléchées Haut/Bas
+    pour naviguer entre les lignes de dépenses au lieu de faire défiler.
+    """
+    def __init__(self, view_instance, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.view = view_instance # Garde une référence à la fenêtre principale
+
+    def keyPressEvent(self, event: QKeyEvent):
+        key = event.key()
+
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+            focused_widget = QApplication.focusWidget()
+            if not focused_widget:
+                super().keyPressEvent(event)
+                return
+
+            current_row = self.view._find_parent_row(focused_widget)
+            if not current_row:
+                super().keyPressEvent(event)
+                return
+            
+            try:
+                current_index = self.view.expense_rows.index(current_row)
+                current_layout = current_row.layout()
+                current_col = -1
+
+                # 1. On trouve la colonne du widget qui a le focus
+                for i in range(current_layout.count()):
+                    if current_layout.itemAt(i).widget() == focused_widget:
+                        _, current_col, _, _ = current_layout.getItemPosition(i)
+                        break
+
+                if current_col == -1: # Si on n'a pas trouvé, on abandonne
+                    super().keyPressEvent(event)
+                    return
+                
+                next_index = -1
+                if key == Qt.Key.Key_Down and current_index < len(self.view.expense_rows) - 1:
+                    next_index = current_index + 1
+                elif key == Qt.Key.Key_Up and current_index > 0:
+                    next_index = current_index - 1
+                
+                if next_index != -1:
+                    target_row = self.view.expense_rows[next_index]
+                    target_layout = target_row.layout()
+                    
+                    # 2. On cible le widget dans la MÊME colonne sur la nouvelle ligne
+                    target_item = target_layout.itemAtPosition(0, current_col)
+                    if target_item and target_item.widget():
+                        target_widget = target_item.widget()
+                        target_widget.setFocus()
+                        if isinstance(target_widget, QLineEdit):
+                            target_widget.selectAll()
+                        
+                        self.ensureWidgetVisible(target_widget, yMargin=10)
+                    
+                    event.accept()
+                    return
+
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Erreur de navigation clavier: {e}")
+        
+        super().keyPressEvent(event)
+
 class BudgetView(QMainWindow):
     def __init__(self, controller):
         super().__init__()
@@ -31,28 +98,13 @@ class BudgetView(QMainWindow):
         
         self._init_ui()
 
-    # Dans view.py, remplacez la méthode _init_ui
+    # Dans view.py
 
     def _init_ui(self):
         self.setWindowTitle("Application de Budget (PyQt6)")
-
-        # --- MODIFICATION : Calcul de la géométrie dynamique ---
-        # 1. On récupère les informations de l'écran principal
         screen = QApplication.primaryScreen()
-        
-        # 2. On utilise availableGeometry() pour avoir la taille SANS la barre des tâches
         available_geometry = screen.availableGeometry()
-        screen_height = available_geometry.height()
-        screen_width = available_geometry.width()
-
-        # 3. On définit la largeur souhaitée et on calcule la position pour centrer la fenêtre
-        app_width = 950
-        pos_x = (screen_width - app_width) // 2
-        pos_y = available_geometry.y() # Positionne la fenêtre en haut de l'espace disponible
-
-        # 4. On applique la nouvelle géométrie
-        self.setGeometry(pos_x, pos_y, app_width, screen_height)
-        # L'ancienne ligne "self.setGeometry(100, 100, 950, 750)" est maintenant remplacée.
+        self.setGeometry(100, 100, 950, available_geometry.height())
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -187,7 +239,7 @@ class BudgetView(QMainWindow):
         header_layout.setColumnStretch(8, 1)  # Actions (index décalé)
         main_layout.addLayout(header_layout)
 
-        self.scroll_area = QScrollArea()
+        self.scroll_area = ExpenseScrollArea(self) # On passe 'self' (la vue) en référence
         self.scroll_area.setWidgetResizable(True)
         
         self.expenses_container = QWidget()
@@ -275,6 +327,30 @@ class BudgetView(QMainWindow):
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+
+    def _find_parent_row(self, widget: QWidget) -> Optional[QWidget]:
+        """
+        Remonte la hiérarchie d'un widget pour trouver la ligne de dépense
+        (row_widget) qui le contient.
+        """
+        current_widget = widget
+        while current_widget is not None:
+            if current_widget in self.expense_rows:
+                return current_widget
+            current_widget = current_widget.parent()
+        return None
+
+    # --- MODIFICATION DE LA GESTION DES ÉVÉNEMENTS CLAVIER ---
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """
+        Gère les pressions sur les touches du clavier pour la fenêtre principale.
+        La logique de navigation a été déplacée dans ExpenseScrollArea.
+        """
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
 
     def focus_on_last_expense_name(self):
         if not self.expense_rows:
@@ -389,7 +465,7 @@ class BudgetView(QMainWindow):
         extra_summary_layout = QFormLayout()
         # --- MODIFICATION : On déplace "nombre_depenses" ici ---
         extra_items = {
-            "nombre_depenses": "Nombre de Dépenses:",
+            "nombre_depenses": "Nombre de Lignes:",
             "total_depenses_fixes": "Total Dépenses Fixes:"
         }
         for key, text in extra_items.items():
@@ -601,7 +677,4 @@ class BudgetView(QMainWindow):
         filepath, _ = QFileDialog.getSaveFileName(self, "Exporter vers JSON", "", "Fichiers JSON (*.json);;Tous les fichiers (*.*)")
         return Path(filepath) if filepath else None
     
-    def keyPressEvent(self, event: QKeyEvent):
-        """Ferme la fenêtre si la touche 'Échap' est pressée."""
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
+    
