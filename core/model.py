@@ -416,6 +416,7 @@ class BudgetModel(Observable):
             return Result.error("Une erreur inattendue s'est produite")
     
     # ===== GESTION DES DÉPENSES =====
+
     def add_expense(self, nom: str = "", montant_str: str = "0", 
                    categorie: str = "Autres", effectue: bool = False, 
                    emprunte: bool = False, est_fixe: bool = False) -> Result:
@@ -434,7 +435,7 @@ class BudgetModel(Observable):
                 categorie=validation_result.validated_data.get('categorie', categorie),
                 effectue=effectue,
                 emprunte=emprunte,
-                est_fixe=est_fixe # <-- AJOUT
+                est_fixe=est_fixe
             )
             
             depense_id = self._db_manager.create_depense(self.mois_actuel.id, depense)
@@ -442,9 +443,12 @@ class BudgetModel(Observable):
             
             self._depenses.append(depense)
 
-            self._refresh_displayed_expenses() # Rafraîchit l'affichage
+            # --- CORRECTION : On supprime l'appel redondant qui redessine toute la liste ---
+            # self._refresh_displayed_expenses()  # <--- SUPPRIMEZ OU COMMENtEZ CETTE LIGNE
             
+            # On ne garde que la notification spécifique, qui est beaucoup plus performante
             self.notify_observers('expense_added', depense)
+            
             return Result.success("Dépense ajoutée")
             
         except DatabaseError as e:
@@ -453,8 +457,6 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.critical(f"Erreur inattendue lors ajout dépense: {e}")
             return Result.error("Une erreur inattendue s'est produite")
-    
-    # Dans model.py, remplacez la méthode update_expense
 
     def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, 
                      categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:

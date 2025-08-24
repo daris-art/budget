@@ -457,7 +457,7 @@ class BudgetView(QMainWindow):
             }
         return {}
 
-    # Dans view.py, remplacez entièrement la méthode _create_summary_section
+# Dans view.py, remplacez entièrement la méthode _create_summary_section par celle-ci :
 
     def _create_summary_section(self) -> QGroupBox:
         group_box = QGroupBox("Récapitulatif")
@@ -485,8 +485,8 @@ class BudgetView(QMainWindow):
         for key, text in items[:mid_point]:
             label = QLabel(text)
             value_label = QLabel("0.00 €")
-            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            # --- AJOUT : Stabilité de la largeur et alignement ---
+            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
+            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
             value_label.setMinimumWidth(120)
             value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
@@ -494,8 +494,8 @@ class BudgetView(QMainWindow):
         for key, text in items[mid_point:]:
             label = QLabel(text)
             value_label = QLabel("0.00 €")
-            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            # --- AJOUT : Stabilité de la largeur et alignement ---
+            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
+            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
             value_label.setMinimumWidth(120)
             value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
@@ -521,8 +521,8 @@ class BudgetView(QMainWindow):
         for key, text in extra_items.items():
             label = QLabel(text)
             value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
-            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            # --- AJOUT : Stabilité de la largeur et alignement ---
+            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
+            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
             value_label.setMinimumWidth(120)
             value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
@@ -539,7 +539,6 @@ class BudgetView(QMainWindow):
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
         left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
         
-        # Le reste de la fonction est inchangé
         main_layout.addWidget(left_container)
         main_layout.addStretch()
         separator_btc = QFrame(); separator_btc.setFrameShape(QFrame.Shape.VLine); separator_btc.setFrameShadow(QFrame.Shadow.Sunken)
