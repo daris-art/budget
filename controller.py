@@ -243,8 +243,6 @@ class BudgetController:
             self.view.hide_progress_bar()
             self.view.set_month_actions_enabled(True)
 
-    # Dans controller.py, remplacez entièrement la méthode handle_live_update
-
     def handle_live_update(self):
         """
         Met à jour le récapitulatif en direct en se basant sur les données
@@ -261,43 +259,49 @@ class BudgetController:
             total_effectue = 0.0
             total_emprunte = 0.0
             nombre_depenses = 0
-            # --- AJOUTS ---
-            total_revenus = 0.0
+            total_revenus = 0.0 # Revenus de la liste (hors salaire)
             total_depenses_fixes = 0.0
 
             for i in range(len(self.view.expense_rows)):
+                # La vue envoie maintenant la clé 'est_credit', donc plus d'erreur.
                 data = self.view.get_expense_data(i)
-                montant_str = data['montant_str'].replace(',', '.')
+                if not data: continue
+
+                montant_str = data.get('montant_str', '0').replace(',', '.')
                 montant = float(montant_str) if montant_str.strip() and montant_str.strip() != '-' else 0.0
 
-                if data['est_credit']:
+                if data.get('est_credit', False):
                     total_revenus += montant
                 else: # C'est une dépense
                     nombre_depenses += 1
                     total_depenses += montant
-                    if data['effectue']:
+                    if data.get('effectue', False):
                         total_effectue += montant
-                    if data['emprunte']:
+                    if data.get('emprunte', False):
                         total_emprunte += montant
-                    if data['est_fixe']:
+                    if data.get('est_fixe', False):
                         total_depenses_fixes += montant
             
+            # --- CORRECTION DU CALCUL DE L'ARGENT RESTANT ---
+            # Argent restant = Salaire + Autres revenus - Dépenses
+            argent_restant = salaire + total_revenus - total_depenses
+
             summary_data = {
                 "nombre_depenses": nombre_depenses,
                 "total_depenses": total_depenses,
-                "argent_restant": salaire - total_depenses,
+                "argent_restant": argent_restant,
                 "total_effectue": total_effectue,
                 "total_non_effectue": total_depenses - total_effectue,
                 "total_emprunte": total_emprunte,
-                # --- AJOUTS ---
-                "total_revenus": total_revenus,
+                # On affiche le total des revenus de la liste (crédits)
+                "total_revenus": total_revenus + salaire,
                 "total_depenses_fixes": total_depenses_fixes
             }
             self.view.update_summary_display(summary_data)
 
-        except (ValueError, TypeError, KeyError) as e:
-            logger.debug(f"Erreur non bloquante pendant la mise à jour en direct : {e}")
-            pass
+        except Exception as e:
+            # On logue l'erreur pour le débogage au lieu de juste l'ignorer
+            logger.error(f"Erreur dans handle_live_update: {e}")
 
     def handle_toggle_theme(self):
         """Bascule entre le thème clair et le thème sombre."""

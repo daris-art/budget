@@ -365,6 +365,8 @@ class BudgetView(QMainWindow):
         montant_input.textChanged.connect(self.controller.handle_live_update)
         effectue_check.stateChanged.connect(self.controller.handle_live_update)
         emprunte_check.stateChanged.connect(self.controller.handle_live_update)
+        montant_input.textChanged.connect(self.controller.handle_live_update)
+        
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
