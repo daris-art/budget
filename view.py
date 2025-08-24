@@ -1,6 +1,5 @@
 # view.py (Version avec fermeture sur 'Échap')
 
-import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import qdarktheme
@@ -226,7 +225,6 @@ class BudgetView(QMainWindow):
         effectue_check.setChecked(depense.effectue)
         emprunte_check = QCheckBox()
         emprunte_check.setChecked(depense.emprunte)
-        # --- AJOUT : Création de la CheckBox "Fixe" ---
         fixe_check = QCheckBox()
         fixe_check.setChecked(depense.est_fixe)
         btn_supprimer_depense = QPushButton("➖")
@@ -246,11 +244,11 @@ class BudgetView(QMainWindow):
         row_layout.setColumnStretch(1, 6)
         row_layout.setColumnStretch(2, 2)
         row_layout.setColumnStretch(3, 2)
-        row_layout.setColumnStretch(4, 2) # (réduit de 3 à 2)
+        row_layout.setColumnStretch(4, 2)
         row_layout.setColumnStretch(5, 1)
         row_layout.setColumnStretch(6, 1)
-        row_layout.setColumnStretch(7, 1) # (nouveau)
-        row_layout.setColumnStretch(8, 1) # (décalé)
+        row_layout.setColumnStretch(7, 1)
+        row_layout.setColumnStretch(8, 1)
 
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
@@ -266,6 +264,19 @@ class BudgetView(QMainWindow):
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+
+    def set_expenses_interactive(self, enabled: bool):
+        """
+        Active ou désactive l'interactivité de toutes les lignes de dépenses,
+        sauf l'indicateur de type (emoji).
+        """
+        for row_widget in self.expense_rows:
+            layout = row_widget.layout()
+            if layout:
+                for col in range(1, layout.columnCount()):
+                    item = layout.itemAtPosition(0, col)
+                    if item and item.widget():
+                        item.widget().setEnabled(enabled)
 
     def focus_on_last_expense_name(self):
         if not self.expense_rows:
@@ -289,28 +300,22 @@ class BudgetView(QMainWindow):
         return self.sort_options.get(current_text, "date_desc")
     
     def set_month_actions_enabled(self, enabled: bool):
-        # Cible le premier groupe (Gestion du Mois) par son nom
         month_group = self.findChild(QGroupBox, "MonthActionsGroup")
         if month_group:
             month_group.setEnabled(enabled)
 
-        # Cible le second groupe (Salaire et Actions) par son nouveau nom
         salary_group = self.findChild(QGroupBox, "SalaryActionsGroup")
         if salary_group:
             salary_group.setEnabled(enabled)
     
-        # Désactiver/Réactiver la ComboBox de sélection du mois
         if month_group:
             self.mois_selector_combo.setEnabled(enabled)
 
-        # Bouton "Ajouter une dépense"
         if hasattr(self, 'btn_add_expense'):
             self.btn_add_expense.setEnabled(enabled)
         
-        # Bouton "Voir Graphiques"
         if hasattr(self, 'btn_voir_graphiques'):
             self.btn_voir_graphiques.setEnabled(enabled)
-
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):
@@ -322,7 +327,7 @@ class BudgetView(QMainWindow):
                 "categorie": layout.itemAtPosition(0, 4).widget().currentText(),
                 "effectue": layout.itemAtPosition(0, 5).widget().isChecked(),
                 "emprunte": layout.itemAtPosition(0, 6).widget().isChecked(),
-                "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(), # <-- AJOUT
+                "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(),
             }
         return {}
 
@@ -330,11 +335,9 @@ class BudgetView(QMainWindow):
         group_box = QGroupBox("Récapitulatif")
         main_layout = QHBoxLayout()
 
-        # --- Conteneur pour la partie gauche (Totaux + Bouton Graphiques) ---
         left_container = QWidget()
         left_layout = QHBoxLayout(left_container)
 
-        # Création des colonnes de totaux
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
         
@@ -377,10 +380,8 @@ class BudgetView(QMainWindow):
         self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
         
-        # --- MODIFICATION 1 : Centrer le bouton verticalement ---
         left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # --- Ajout des éléments au layout principal ---
         main_layout.addWidget(left_container)
         main_layout.addStretch()
 
@@ -389,7 +390,6 @@ class BudgetView(QMainWindow):
         separator3.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator3)
 
-        # --- Conteneur pour le Bitcoin (partie droite) ---
         btc_container = QWidget()
         btc_layout = QVBoxLayout(btc_container)
         btc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -398,16 +398,17 @@ class BudgetView(QMainWindow):
         btc_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.btc_price_label = QLabel("N/A")
-        self.btc_price_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        # --- MODIFICATION : Réduction de la police du prix ---
+        self.btc_price_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.btc_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.btn_refresh_btc = QPushButton("🔄")
         self.btn_refresh_btc.setToolTip("Mettre à jour le cours du Bitcoin")
         
-        # --- MODIFICATION 2 : Agrandir le bouton et l'icône ---
-        self.btn_refresh_btc.setFixedSize(50, 50)
+        # --- MODIFICATION : Réduction de la taille du bouton et de l'icône ---
+        self.btn_refresh_btc.setFixedSize(40, 26)
         font = self.btn_refresh_btc.font()
-        font.setPointSize(16)
+        font.setPointSize(18)
         self.btn_refresh_btc.setFont(font)
         
         btc_layout.addWidget(btc_title_label)
@@ -419,12 +420,9 @@ class BudgetView(QMainWindow):
         group_box.setLayout(main_layout)
         return group_box
     
-    # Ajoutez cette nouvelle méthode à la classe BudgetView
     def update_bitcoin_price(self, price_text: str, tooltip_text: str):
-        """Met à jour le label affichant le prix du Bitcoin."""
         self.btc_price_label.setText(price_text)
         self.btc_price_label.setToolTip(tooltip_text)
-
 
     def _create_status_bar(self):
         self.status_bar = self.statusBar()
@@ -444,9 +442,6 @@ class BudgetView(QMainWindow):
                 QPushButton#RedButton:hover { background-color: #6E3636; }
                 QPushButton#GreenButton { background-color: #2A582A; border: 1px solid #458B45; }
                 QPushButton#GreenButton:hover { background-color: #366E36; }
-                QLabel[cssClass="summaryValue"] { color: #E0E0E0; }
-                QLabel[cssClass="summaryValueNegative"] { color: #F87171; }
-                QLabel[cssClass="summaryValuePositive"] { color: #4ADE80; }
             """
         else:
             custom_styles = """
@@ -454,11 +449,7 @@ class BudgetView(QMainWindow):
                 QPushButton#RedButton:hover { background-color: #ffbbbb; }
                 QPushButton#GreenButton { background-color: #ddffdd; border: 1px solid #99ff99; }
                 QPushButton#GreenButton:hover { background-color: #bbffbb; }
-                QLabel[cssClass="summaryValue"] { color: #000000; }
-                QLabel[cssClass="summaryValueNegative"] { color: #DC2626; }
-                QLabel[cssClass="summaryValuePositive"] { color: #16A34A; }
             """
-        custom_styles += """QLabel[cssClass="shiftedHeader"] { padding-right: 25px; }"""
         final_stylesheet = qdarktheme.load_stylesheet(theme) + custom_styles
         app = QApplication.instance()
         if app:
@@ -484,10 +475,9 @@ class BudgetView(QMainWindow):
                     label.setText(str(int(value)))
                 else:
                     label.setText(f"{value:,.2f} €".replace(",", " "))
-                label.setProperty("cssClass", "summaryValue")
+                
                 if key == 'argent_restant':
-                    label.setProperty("cssClass", "summaryValueNegative" if value < 0 else "summaryValuePositive")
-                label.style().polish(label)
+                    label.setStyleSheet("color: #F87171;" if value < 0 else "color: #4ADE80;")
 
     def remove_expense_widget(self, index: int):
         if 0 <= index < len(self.expense_rows):
@@ -504,8 +494,6 @@ class BudgetView(QMainWindow):
         self.clear_all_expenses()
         for i, depense in enumerate(display_data.depenses):
             self.add_expense_widget(depense, i)
-            if i % 15 == 0:
-                QApplication.processEvents()
         summary = {
             "nombre_depenses": display_data.nombre_depenses,
             "total_depenses": display_data.total_depenses,
@@ -547,21 +535,12 @@ class BudgetView(QMainWindow):
         self.status_bar.showMessage(text, duration)
 
     def show_progress_bar(self, indeterminate: bool = False):
-        if indeterminate:
-            self.progress_bar.setRange(0, 0)
-        else:
-            self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(0)
+        self.progress_bar.setRange(0, 0 if indeterminate else 100)
         self.progress_bar.show()
 
     def hide_progress_bar(self):
         self.progress_bar.hide()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
     
-    def update_progress_bar(self, value: int):
-        self.progress_bar.setValue(value)
-
     def clear_for_loading(self, message: str = "Chargement..."):
         self.clear_all_expenses()
         self.update_status_bar(message, duration=0)
@@ -580,6 +559,5 @@ class BudgetView(QMainWindow):
         return Path(filepath) if filepath else None
     
     def keyPressEvent(self, event: QKeyEvent):
-        """Ferme la fenêtre si la touche 'Échap' est pressée."""
         if event.key() == Qt.Key.Key_Escape:
             self.close()
