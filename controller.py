@@ -370,11 +370,12 @@ class BudgetController:
             self._refresh_summary_view()
         elif event_type == 'expenses_sorted':
             self._refresh_complete_view()
-        elif event_type == 'expenses_redisplayed':
-            # La vue est notifiée qu'il faut redessiner la liste des dépenses
-            self.view.refresh_expense_list(data)
-            # On met aussi à jour le résumé car le nombre de lignes affichées a pu changer
-            self._refresh_summary_view() 
+
+        elif event_type == 'display_updated':
+            # On met à jour la liste des dépenses ET le résumé en même temps
+            self.view.refresh_expense_list(data['expenses'])
+            self.view.update_summary_display(data['summary'])
+
 
     # --- MÉTHODES PRIVÉES ---
 

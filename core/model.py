@@ -33,7 +33,35 @@ class BudgetModel(Observable):
         self._current_search_term = search_text.lower()
         self._refresh_displayed_expenses()
 
-    # Dans model.py, à l'intérieur de la classe BudgetModel
+    # --- NOUVELLE MÉTHODE PRIVÉE ---
+    def _calculate_summary_for_list(self, expense_list: List[Depense]) -> Dict[str, float]:
+        """
+        Calcule les totaux pour une liste de dépenses/revenus fournie.
+        Note : 'Argent Restant' et 'Total Revenus' sont toujours calculés sur le total du mois.
+        """
+        # On calcule les totaux qui dépendent de la liste filtrée
+        total_depenses_affiches = sum(d.montant for d in expense_list if not d.est_credit)
+        total_effectue_affiches = sum(d.montant for d in expense_list if d.effectue and not d.est_credit)
+        total_emprunte_affiches = sum(d.montant for d in expense_list if d.emprunte)
+        total_depenses_fixes_affiches = sum(d.montant for d in expense_list if not d.est_credit and d.est_fixe)
+        nombre_depenses_affiches = sum(1 for d in expense_list if not d.est_credit)
+
+        # --- MODIFICATION : Calcul des revenus uniquement sur la liste affichée ---
+        total_revenus_affiches = sum(d.montant for d in expense_list if d.est_credit)
+        
+        
+        return {
+            # Totaux basés sur la liste affichée
+            "nombre_depenses": nombre_depenses_affiches,
+            "total_depenses": total_depenses_affiches,
+            "total_effectue": total_effectue_affiches,
+            "total_non_effectue": total_depenses_affiches - total_effectue_affiches,
+            "total_emprunte": total_emprunte_affiches,
+            "total_depenses_fixes": total_depenses_fixes_affiches,
+            # Totaux globaux qui ne changent pas avec la recherche
+            "total_revenus": total_revenus_affiches,
+            "argent_restant": self.get_argent_restant()
+        }
 
     def _refresh_displayed_expenses(self):
         """
@@ -80,11 +108,18 @@ class BudgetModel(Observable):
         except (ValueError, TypeError) as e:
             logger.error(f"Erreur de tri lors du rafraîchissement: {e}")
 
-        # 3. Mise à jour de la liste qui sera affichée
+        # Mise à jour de la liste qui sera affichée
         self._displayed_depenses = temp_list
         
-        # 4. Notification à la vue pour qu'elle se redessine avec la nouvelle liste
-        self.notify_observers('expenses_redisplayed', self._displayed_depenses)
+        # 3. Calcul du résumé pour la liste filtrée et triée
+        summary_for_display = self._calculate_summary_for_list(self._displayed_depenses)
+        
+        # 4. Notification à la vue avec un paquet de données complet
+        update_data = {
+            'expenses': self._displayed_depenses,
+            'summary': summary_for_display
+        }
+        self.notify_observers('display_updated', update_data)
 
     def get_nombre_depenses(self) -> int:
         """Retourne le nombre total de dépenses pour le mois actuel."""
