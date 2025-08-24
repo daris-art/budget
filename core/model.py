@@ -454,32 +454,46 @@ class BudgetModel(Observable):
             logger.critical(f"Erreur inattendue lors ajout dépense: {e}")
             return Result.error("Une erreur inattendue s'est produite")
     
-    # Dans model.py, remplacez la méthode update_expense dans la classe BudgetModel
+    # Dans model.py, remplacez la méthode update_expense
 
-    def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:
-        """Met à jour une dépense existante."""
-        if not (0 <= index < len(self._depenses)):
-            return Result.error("Index de dépense invalide")
+    def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, 
+                     categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:
+        """Met à jour une dépense existante et rafraîchit l'affichage."""
+        
+        # --- MODIFICATION : On met à jour l'objet dans la liste source `_depenses` ---
+        # Pour cela, il faut trouver le bon objet par son ID, car l'index
+        # ne correspond qu'à la liste affichée.
+        if not (0 <= index < len(self._displayed_depenses)):
+            return Result.error("Index de dépense invalide.")
+        
+        depense_a_mettre_a_jour_id = self._displayed_depenses[index].id
+        
+        # On trouve la dépense correspondante dans la liste source non filtrée
+        original_depense = next((d for d in self._depenses if d.id == depense_a_mettre_a_jour_id), None)
+        if not original_depense:
+            return Result.error("Impossible de trouver la dépense originale à mettre à jour.")
 
-        # La validation pourrait être étendue pour inclure la date
         validation = self._validator.validate_expense_data(nom, montant_str, categorie)
         if not validation.is_valid:
             return Result.error("\n".join(validation.errors))
 
-        depense_a_jour = self._depenses[index]
-        depense_a_jour.nom = validation.validated_data['nom']
-        depense_a_jour.montant = validation.validated_data['montant']
-        depense_a_jour.categorie = validation.validated_data['categorie']
-        # --- MODIFICATION : Mise à jour de la date dans l'objet ---
-        depense_a_jour.date_depense = date_depense
-        depense_a_jour.effectue = effectue
-        depense_a_jour.emprunte = emprunte
-        depense_a_jour.est_fixe = est_fixe # <-- AJOUT
-        # Note: est_credit n'est pas modifié ici, il ne l'est qu'à la création/import.
+        # On met à jour l'objet original
+        original_depense.nom = validation.validated_data['nom']
+        original_depense.montant = validation.validated_data['montant']
+        original_depense.categorie = validation.validated_data['categorie']
+        original_depense.date_depense = date_depense
+        original_depense.effectue = effectue
+        original_depense.emprunte = emprunte
+        original_depense.est_fixe = est_fixe
 
         try:
-            self._db_manager.update_depense(depense_a_jour)
-            self.notify_observers('expense_updated', {'index': index, 'depense': depense_a_jour})
+            self._db_manager.update_depense(original_depense)
+            
+            # --- MODIFICATION CLÉ ---
+            # Au lieu de notifier 'expense_updated', on rafraîchit tout l'affichage.
+            # Cela va refiltrer, retrier et recalculer le résumé correctement.
+            self._refresh_displayed_expenses()
+            
             return Result.success()
         except DatabaseError as e:
             return Result.error(str(e))

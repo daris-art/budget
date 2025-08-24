@@ -348,7 +348,12 @@ class BudgetController:
         if not self.view: return
         logger.info(f"Événement reçu: {event_type}")
 
-        if event_type == 'theme_changed':
+        if event_type == 'display_updated':
+            # Cet événement gère maintenant TOUS les rafraîchissements
+            # de la liste et du résumé.
+            self.view.refresh_expense_list(data['expenses'])
+            self.view.update_summary_display(data['summary'])
+        elif event_type == 'theme_changed':
             self.view.apply_theme(data)
         elif event_type in ['mois_created', 'mois_loaded']:
             self._refresh_complete_view()
@@ -363,7 +368,7 @@ class BudgetController:
             self.view.scroll_expenses_to_bottom()
             self.view.focus_on_last_expense_name()
             self._refresh_summary_view()
-        elif event_type in ['expense_updated', 'live_summary_updated']:
+        elif event_type in ['live_summary_updated']:
             self._refresh_summary_view()
         elif event_type == 'expense_removed':
             self.view.remove_expense_widget(data['index'])

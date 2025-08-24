@@ -457,6 +457,8 @@ class BudgetView(QMainWindow):
             }
         return {}
 
+    # Dans view.py, remplacez entièrement la méthode _create_summary_section
+
     def _create_summary_section(self) -> QGroupBox:
         group_box = QGroupBox("Récapitulatif")
         main_layout = QHBoxLayout()
@@ -464,12 +466,12 @@ class BudgetView(QMainWindow):
         # --- Conteneur pour toute la partie gauche (Tout sauf le Bitcoin) ---
         left_container = QWidget()
         left_layout = QHBoxLayout(left_container)
+        left_layout.setContentsMargins(0,0,0,0)
 
         # Création des colonnes de totaux principaux
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
         
-        # --- MODIFICATION : On déplace "total_revenus" ici ---
         summary_items = {
             "total_revenus": "Total des Revenus:",
             "total_depenses": "Total des Dépenses:",
@@ -482,58 +484,66 @@ class BudgetView(QMainWindow):
         mid_point = (len(items) + 1) // 2
         for key, text in items[:mid_point]:
             label = QLabel(text)
-            # La condition pour "nombre_depenses" n'est plus utile ici
             value_label = QLabel("0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            # --- AJOUT : Stabilité de la largeur et alignement ---
+            value_label.setMinimumWidth(120)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
             left_form_layout.addRow(label, value_label)
         for key, text in items[mid_point:]:
             label = QLabel(text)
             value_label = QLabel("0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            # --- AJOUT : Stabilité de la largeur et alignement ---
+            value_label.setMinimumWidth(120)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
             right_form_layout.addRow(label, value_label)
 
         left_layout.addLayout(left_form_layout)
+        left_layout.addSpacing(20)
         separator1 = QFrame(); separator1.setFrameShape(QFrame.Shape.VLine); separator1.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator1)
+        left_layout.addSpacing(20)
         left_layout.addLayout(right_form_layout)
 
-        # --- Section pour les totaux supplémentaires ---
+        left_layout.addSpacing(20)
         separator2 = QFrame(); separator2.setFrameShape(QFrame.Shape.VLine); separator2.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator2)
+        left_layout.addSpacing(20)
 
         extra_summary_layout = QFormLayout()
-        # --- MODIFICATION : On déplace "nombre_depenses" ici ---
         extra_items = {
             "nombre_depenses": "Nombre de Lignes:",
             "total_depenses_fixes": "Total Dépenses Fixes:"
         }
         for key, text in extra_items.items():
             label = QLabel(text)
-            # --- MODIFICATION : On déplace la condition pour le formatage sans décimales ici ---
             value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
             value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            # --- AJOUT : Stabilité de la largeur et alignement ---
+            value_label.setMinimumWidth(120)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.summary_labels[key] = value_label
             extra_summary_layout.addRow(label, value_label)
         
         left_layout.addLayout(extra_summary_layout)
-
-        # --- Le reste de la fonction est inchangé ---
+        left_layout.addSpacing(20)
         separator3 = QFrame(); separator3.setFrameShape(QFrame.Shape.VLine); separator3.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator3)
+        left_layout.addSpacing(10)
 
         self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
         self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
         left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
         
+        # Le reste de la fonction est inchangé
         main_layout.addWidget(left_container)
         main_layout.addStretch()
-
         separator_btc = QFrame(); separator_btc.setFrameShape(QFrame.Shape.VLine); separator_btc.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator_btc)
-        
         btc_container = QWidget()
         btc_layout = QVBoxLayout(btc_container)
         btc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
