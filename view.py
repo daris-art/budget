@@ -356,27 +356,24 @@ class BudgetView(QMainWindow):
         row_layout.setColumnStretch(7, 1)
         row_layout.setColumnStretch(8, 1)
 
-        # --- CORRECTION DES CONNEXIONS ---
-
+        # CONNEXIONS OPTIMISÉES:
+        # Sauvegarde uniquement à la fin de l'édition
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        montant_input.textChanged.connect(self.controller.handle_live_update)  # Mise à jour live
-        
         date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         
-        # Pour les checkboxes: sauvegarde + mise à jour live immédiate
+        # MODIFICATION: Les checkboxes ne déclenchent QUE la sauvegarde
+        # La mise à jour live sera gérée par handle_update_expense
         effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        effectue_check.stateChanged.connect(self.controller.handle_live_update)
-        
         emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        emprunte_check.stateChanged.connect(self.controller.handle_live_update)
-        
         fixe_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        fixe_check.stateChanged.connect(self.controller.handle_live_update)
+        
+        # MODIFICATION: Seul le montant déclenche une mise à jour live pendant la frappe
+        montant_input.textChanged.connect(self.controller.handle_live_update)
         
         btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
-        
+
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 

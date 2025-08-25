@@ -22,6 +22,11 @@ class BudgetController:
         self.model = model
         self.view = None
         self.model.add_observer(self)
+
+        # AJOUT: Variables pour éviter les rafraîchissements multiples
+        self._update_timer = None
+        self._pending_live_update = False
+
         self.import_thread = None
         self.import_worker = None
         self.btc_thread = None
@@ -30,6 +35,11 @@ class BudgetController:
     def set_view(self, view):
         """Associe la vue à ce contrôleur."""
         self.view = view
+        # AJOUT: Timer pour les mises à jour différées
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.timeout.connect(self._perform_live_update)
+
         if hasattr(self.view, 'btn_refresh_btc'):
             self.view.btn_refresh_btc.clicked.connect(self.handle_fetch_bitcoin_price)
 
@@ -192,6 +202,9 @@ class BudgetController:
                 
                 result = self.model.update_expense(index, **data)
                 self._handle_result(result, show_success=False)
+
+                # MODIFICATION: Déclenche une mise à jour live différée au lieu d'immédiate
+                self._schedule_live_update()
         except Exception as e:
             logger.error(f"Erreur critique lors de la mise à jour de la dépense {index}: {e}")
             self.view.show_error_message(f"Impossible de sauvegarder la dépense : {e}")
@@ -253,9 +266,25 @@ class BudgetController:
 
     def handle_live_update(self):
         """
-        Met à jour le récapitulatif en direct en se basant sur les données
-        actuellement affichées dans la vue. Utilise uniquement les revenus et dépenses.
+        MODIFICATION: Planifie une mise à jour différée au lieu d'une mise à jour immédiate
+        pour éviter les rafraîchissements multiples.
         """
+        self._schedule_live_update()
+
+    def _schedule_live_update(self):
+        """
+        NOUVEAU: Planifie une mise à jour live avec un délai pour éviter les appels multiples.
+        """
+        if self._update_timer and not self._pending_live_update:
+            self._pending_live_update = True
+            self._update_timer.start(50)  # Délai de 50ms
+
+    def _perform_live_update(self):
+        """
+        NOUVEAU: Effectue la vraie mise à jour live des totaux.
+        """
+        self._pending_live_update = False
+        
         if not self.view or not self.model.mois_actuel:
             return
 
@@ -289,12 +318,11 @@ class BudgetController:
             # Utiliser la méthode du modèle pour calculer les totaux
             summary_data = self.model._calculate_summary_for_list(temp_expenses)
             
-            # Mettre à jour l'affichage
+            # Mettre à jour SEULEMENT le récapitulatif, pas la liste des dépenses
             self.view.update_summary_display(summary_data)
 
         except Exception as e:
-            logger.error(f"Erreur dans handle_live_update: {e}")
-
+            logger.error(f"Erreur dans _perform_live_update: {e}")
 
     def handle_toggle_theme(self):
         """Bascule entre le thème clair et le thème sombre."""
@@ -341,43 +369,45 @@ class BudgetController:
     # --- MÉTHODE DE L'OBSERVATEUR ---
 
     def on_model_changed(self, event_type: str, data: any):
-        """Méthode appelée par le modèle lorsqu'il change."""
-        if not self.view: return
+        """
+        MODIFICATION: Optimisation pour éviter les rafraîchissements redondants.
+        """
+        if not self.view: 
+            return
+        
         logger.info(f"Événement reçu: {event_type}")
 
         if event_type == 'display_updated':
-            # Cet événement gère maintenant TOUS les rafraîchissements
-            # de la liste et du résumé.
+            # Cet événement gère tous les rafraîchissements de la liste et du résumé
             self.view.refresh_expense_list(data['expenses'])
             self.view.update_summary_display(data['summary'])
+            
         elif event_type == 'theme_changed':
             self.view.apply_theme(data)
+            
         elif event_type in ['mois_created', 'mois_loaded']:
             self._refresh_complete_view()
             self._refresh_mois_list()
+            
         elif event_type in ['mois_deleted', 'mois_duplicated', 'mois_renamed']:
             self._refresh_mois_list(select_first=True)
+            
         elif event_type == 'salaire_updated':
             self.view.update_salary_display(data)
-            self._refresh_summary_view()
+            # MODIFICATION: Utilise la mise à jour différée
+            self._schedule_live_update()
+            
         elif event_type == 'expense_added':
             self.view.add_expense_widget(data, len(self.model.depenses) - 1)
             self.view.scroll_expenses_to_bottom()
             self.view.focus_on_last_expense_name()
-            self._refresh_summary_view()
-        elif event_type in ['live_summary_updated']:
-            self._refresh_summary_view()
+            # MODIFICATION: Utilise la mise à jour différée
+            self._schedule_live_update()
+            
         elif event_type == 'expense_removed':
             self.view.remove_expense_widget(data['index'])
-            self._refresh_summary_view()
-        elif event_type == 'expenses_sorted':
-            self._refresh_complete_view()
-
-        elif event_type == 'display_updated':
-            # On met à jour la liste des dépenses ET le résumé en même temps
-            self.view.refresh_expense_list(data['expenses'])
-            self.view.update_summary_display(data['summary'])
-
+            # MODIFICATION: Utilise la mise à jour différée
+            self._schedule_live_update()
 
     # --- MÉTHODES PRIVÉES ---
 

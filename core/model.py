@@ -427,9 +427,11 @@ class BudgetModel(Observable):
     # ===== GESTION DES DÉPENSES =====
 
     def add_expense(self, nom: str = "", montant_str: str = "0", 
-                   categorie: str = "Autres", effectue: bool = False, 
-                   emprunte: bool = False, est_fixe: bool = False) -> Result:
-        """Ajoute une nouvelle dépense"""
+               categorie: str = "Autres", effectue: bool = False, 
+               emprunte: bool = False, est_fixe: bool = False) -> Result:
+        """
+        MODIFICATION: Supprime l'appel redondant à _refresh_displayed_expenses.
+        """
         if not self.mois_actuel:
             return Result.error("Aucun mois chargé")
         
@@ -451,11 +453,11 @@ class BudgetModel(Observable):
             depense.id = depense_id
             
             self._depenses.append(depense)
-
-            # --- CORRECTION : On supprime l'appel redondant qui redessine toute la liste ---
-            # self._refresh_displayed_expenses()  # <--- SUPPRIMEZ OU COMMENtEZ CETTE LIGNE
+            # AJOUT: Ajouter aussi à la liste affichée si elle correspond aux critères de filtrage
+            if not self._current_search_term or self._current_search_term in depense.nom.lower():
+                self._displayed_depenses.append(depense)
             
-            # On ne garde que la notification spécifique, qui est beaucoup plus performante
+            # SUPPRESSION: Plus d'appel à _refresh_displayed_expenses
             self.notify_observers('expense_added', depense)
             
             return Result.success("Dépense ajoutée")
@@ -468,18 +470,18 @@ class BudgetModel(Observable):
             return Result.error("Une erreur inattendue s'est produite")
 
     def update_expense(self, index: int, nom: str, montant_str: str, date_depense: str, 
-                     categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:
-        """Met à jour une dépense existante et rafraîchit l'affichage."""
+                 categorie: str, effectue: bool, emprunte: bool, est_fixe: bool) -> Result:
+        """
+        MODIFICATION: Ne déclenche plus _refresh_displayed_expenses pour éviter 
+        le rafraîchissement complet de la liste.
+        """
         
-        # --- MODIFICATION : On met à jour l'objet dans la liste source `_depenses` ---
-        # Pour cela, il faut trouver le bon objet par son ID, car l'index
-        # ne correspond qu'à la liste affichée.
         if not (0 <= index < len(self._displayed_depenses)):
             return Result.error("Index de dépense invalide.")
         
         depense_a_mettre_a_jour_id = self._displayed_depenses[index].id
         
-        # On trouve la dépense correspondante dans la liste source non filtrée
+        # Trouve la dépense correspondante dans la liste source
         original_depense = next((d for d in self._depenses if d.id == depense_a_mettre_a_jour_id), None)
         if not original_depense:
             return Result.error("Impossible de trouver la dépense originale à mettre à jour.")
@@ -488,7 +490,7 @@ class BudgetModel(Observable):
         if not validation.is_valid:
             return Result.error("\n".join(validation.errors))
 
-        # On met à jour l'objet original
+        # Met à jour l'objet original
         original_depense.nom = validation.validated_data['nom']
         original_depense.montant = validation.validated_data['montant']
         original_depense.categorie = validation.validated_data['categorie']
@@ -500,10 +502,19 @@ class BudgetModel(Observable):
         try:
             self._db_manager.update_depense(original_depense)
             
-            # --- MODIFICATION CLÉ ---
-            # Au lieu de notifier 'expense_updated', on rafraîchit tout l'affichage.
-            # Cela va refiltrer, retrier et recalculer le résumé correctement.
-            self._refresh_displayed_expenses()
+            # MODIFICATION CRUCIALE: On met aussi à jour la liste affichée
+            # pour que les deux listes restent synchronisées
+            displayed_depense = self._displayed_depenses[index]
+            displayed_depense.nom = validation.validated_data['nom']
+            displayed_depense.montant = validation.validated_data['montant']
+            displayed_depense.categorie = validation.validated_data['categorie']
+            displayed_depense.date_depense = date_depense
+            displayed_depense.effectue = effectue
+            displayed_depense.emprunte = emprunte
+            displayed_depense.est_fixe = est_fixe
+            
+            # SUPPRESSION: Plus de _refresh_displayed_expenses() qui provoquait le scintillement
+            # La mise à jour des totaux sera gérée par le contrôleur
             
             return Result.success()
         except DatabaseError as e:
