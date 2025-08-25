@@ -396,7 +396,15 @@ class BudgetController:
         elif event_type == 'theme_changed':
             self.view.apply_theme(data)
             
-        elif event_type in ['mois_created', 'mois_loaded']:
+        elif event_type == 'mois_created':
+            # Pour un nouveau mois, on force le nettoyage de la liste des dépenses
+            # avant de rafraîchir l'affichage complet.
+            self.view.clear_all_expenses()
+            self._refresh_complete_view()
+            self._refresh_mois_list()
+            
+        elif event_type == 'mois_loaded':
+            # Pour un mois existant, le rafraîchissement complet suffit.
             self._refresh_complete_view()
             self._refresh_mois_list()
             
