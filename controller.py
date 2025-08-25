@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-
+from core.data_models import Depense
 from PyQt6.QtCore import QThread, QTimer
 from PyQt6.QtWidgets import QApplication
 
@@ -178,11 +178,18 @@ class BudgetController:
         else:
             self.view.show_warning_message("Veuillez d'abord créer ou charger un mois.")
 
+    # controller.py
+
     def handle_update_expense(self, index: int):
         """Gère la mise à jour d'une dépense."""
         try:
             data = self.view.get_expense_data(index)
             if data:
+                # On retire la clé 'est_credit' qui est utile pour le calcul en direct
+                # mais ne doit pas être passée à la méthode de mise à jour du modèle,
+                # car cette propriété n'est pas modifiable depuis l'interface.
+                data.pop('est_credit', None)
+                
                 result = self.model.update_expense(index, **data)
                 self._handle_result(result, show_success=False)
         except Exception as e:
@@ -207,6 +214,7 @@ class BudgetController:
             sort_key = self.view.get_sort_key()
             result = self.model.sort_depenses(sort_key)
             self._handle_result(result, show_success=False)
+            self.handle_live_update()
         finally:
             self.view.hide_progress_bar()
             self.view.set_month_actions_enabled(True)
@@ -246,62 +254,47 @@ class BudgetController:
     def handle_live_update(self):
         """
         Met à jour le récapitulatif en direct en se basant sur les données
-        actuellement affichées dans la vue.
+        actuellement affichées dans la vue. Utilise uniquement les revenus et dépenses.
         """
         if not self.view or not self.model.mois_actuel:
             return
 
         try:
-            salaire_str = self.view.salaire_input.text().replace(',', '.')
-            salaire = float(salaire_str) if salaire_str.strip() and salaire_str.strip() != '-' else 0.0
-
-            total_depenses = 0.0
-            total_effectue = 0.0
-            total_emprunte = 0.0
-            nombre_depenses = 0
-            total_revenus = 0.0 # Revenus de la liste (hors salaire)
-            total_depenses_fixes = 0.0
-
-            for i in range(len(self.view.expense_rows)):
-                # La vue envoie maintenant la clé 'est_credit', donc plus d'erreur.
-                data = self.view.get_expense_data(i)
-                if not data: continue
-
-                montant_str = data.get('montant_str', '0').replace(',', '.')
-                montant = float(montant_str) if montant_str.strip() and montant_str.strip() != '-' else 0.0
-
-                if data.get('est_credit', False):
-                    total_revenus += montant
-                else: # C'est une dépense
-                    nombre_depenses += 1
-                    total_depenses += montant
-                    if data.get('effectue', False):
-                        total_effectue += montant
-                    if data.get('emprunte', False):
-                        total_emprunte += montant
-                    if data.get('est_fixe', False):
-                        total_depenses_fixes += montant
+            # Créer une liste temporaire des dépenses avec les valeurs actuelles de l'interface
+            temp_expenses = []
             
-            # --- CORRECTION DU CALCUL DE L'ARGENT RESTANT ---
-            # Argent restant = Salaire + Autres revenus - Dépenses
-            argent_restant = salaire + total_revenus - total_depenses
+            for i in range(len(self.view.expense_rows)):
+                data = self.view.get_expense_data(i)
+                if not data: 
+                    continue
 
-            summary_data = {
-                "nombre_depenses": nombre_depenses,
-                "total_depenses": total_depenses,
-                "argent_restant": argent_restant,
-                "total_effectue": total_effectue,
-                "total_non_effectue": total_depenses - total_effectue,
-                "total_emprunte": total_emprunte,
-                # On affiche le total des revenus de la liste (crédits)
-                "total_revenus": total_revenus + salaire,
-                "total_depenses_fixes": total_depenses_fixes
-            }
+                # Récupérer le montant depuis l'interface
+                montant_str = data.get('montant_str', '0').replace(',', '.')
+                try:
+                    montant = float(montant_str) if montant_str.strip() and montant_str.strip() != '-' else 0.0
+                except (ValueError, TypeError):
+                    montant = 0.0
+
+                # Créer un objet temporaire avec les valeurs de l'interface
+                temp_expense = type('TempExpense', (), {
+                    'montant': montant,
+                    'est_credit': data.get('est_credit', False),
+                    'effectue': data.get('effectue', False),
+                    'emprunte': data.get('emprunte', False),
+                    'est_fixe': data.get('est_fixe', False)
+                })()
+                
+                temp_expenses.append(temp_expense)
+
+            # Utiliser la méthode du modèle pour calculer les totaux
+            summary_data = self.model._calculate_summary_for_list(temp_expenses)
+            
+            # Mettre à jour l'affichage
             self.view.update_summary_display(summary_data)
 
         except Exception as e:
-            # On logue l'erreur pour le débogage au lieu de juste l'ignorer
             logger.error(f"Erreur dans handle_live_update: {e}")
+
 
     def handle_toggle_theme(self):
         """Bascule entre le thème clair et le thème sombre."""
@@ -446,5 +439,7 @@ class BudgetController:
         Appelé à chaque fois que le texte dans le champ de recherche change.
         """
         self.model.filter_depenses_by_name(search_text)
+        self.handle_live_update()
+
 
     

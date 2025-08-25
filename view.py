@@ -297,9 +297,12 @@ class BudgetView(QMainWindow):
         group_box.setLayout(main_layout)
         return group_box
 
+    # view.py
+
     def add_expense_widget(self, depense: Any, index: int):
         row_widget = QWidget()
         row_widget.depense_id = depense.id
+        row_widget.est_credit = depense.est_credit
         row_layout = QGridLayout(row_widget)
         row_layout.setContentsMargins(5, 2, 5, 2)
 
@@ -328,7 +331,6 @@ class BudgetView(QMainWindow):
         effectue_check.setChecked(depense.effectue)
         emprunte_check = QCheckBox()
         emprunte_check.setChecked(depense.emprunte)
-        # --- AJOUT : Création de la CheckBox "Fixe" ---
         fixe_check = QCheckBox()
         fixe_check.setChecked(depense.est_fixe)
         btn_supprimer_depense = QPushButton("➖")
@@ -348,26 +350,33 @@ class BudgetView(QMainWindow):
         row_layout.setColumnStretch(1, 6)
         row_layout.setColumnStretch(2, 2)
         row_layout.setColumnStretch(3, 2)
-        row_layout.setColumnStretch(4, 2) # (réduit de 3 à 2)
+        row_layout.setColumnStretch(4, 2)
         row_layout.setColumnStretch(5, 1)
         row_layout.setColumnStretch(6, 1)
-        row_layout.setColumnStretch(7, 1) # (nouveau)
-        row_layout.setColumnStretch(8, 1) # (décalé)
+        row_layout.setColumnStretch(7, 1)
+        row_layout.setColumnStretch(8, 1)
+
+        # --- CORRECTION DES CONNEXIONS ---
 
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        montant_input.textChanged.connect(self.controller.handle_live_update)  # Mise à jour live
+        
         date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        fixe_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
-        montant_input.textChanged.connect(self.controller.handle_live_update)
-        effectue_check.stateChanged.connect(self.controller.handle_live_update)
-        emprunte_check.stateChanged.connect(self.controller.handle_live_update)
-        montant_input.textChanged.connect(self.controller.handle_live_update)
         
-
+        # Pour les checkboxes: sauvegarde + mise à jour live immédiate
+        effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        effectue_check.stateChanged.connect(self.controller.handle_live_update)
+        
+        emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        emprunte_check.stateChanged.connect(self.controller.handle_live_update)
+        
+        fixe_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        fixe_check.stateChanged.connect(self.controller.handle_live_update)
+        
+        btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
+        
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 
@@ -447,7 +456,8 @@ class BudgetView(QMainWindow):
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):
-            layout = self.expense_rows[index].layout()
+            row_widget = self.expense_rows[index]
+            layout = row_widget.layout()
             return {
                 "nom": layout.itemAtPosition(0, 1).widget().text(),
                 "montant_str": layout.itemAtPosition(0, 2).widget().text(),
@@ -456,6 +466,7 @@ class BudgetView(QMainWindow):
                 "effectue": layout.itemAtPosition(0, 5).widget().isChecked(),
                 "emprunte": layout.itemAtPosition(0, 6).widget().isChecked(),
                 "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(), # <-- AJOUT
+                "est_credit": row_widget.est_credit,
             }
         return {}
 

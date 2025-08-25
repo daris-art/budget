@@ -22,6 +22,9 @@ class BudgetModel(Observable):
         self._import_export_service = import_export_service
         self._api_service = api_service
 
+        self._displayed_depenses: List[Depense] = []  # AJOUT
+        self._current_search_term: str = ""     
+
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
         self._current_sort_key: str = "date_desc"
@@ -34,33 +37,37 @@ class BudgetModel(Observable):
         self._refresh_displayed_expenses()
 
     # --- NOUVELLE MÉTHODE PRIVÉE ---
-    def _calculate_summary_for_list(self, expense_list: List[Depense]) -> Dict[str, float]:
+    # core/model.py
+
+    # core/model.py
+
+    def _calculate_summary_for_list(self, expense_list: List[Depense], salaire_override: float = None) -> Dict[str, float]:
         """
         Calcule les totaux pour une liste de dépenses/revenus fournie.
-        Note : 'Argent Restant' et 'Total Revenus' sont toujours calculés sur le total du mois.
+        Peut accepter un salaire optionnel pour les calculs en direct depuis l'interface.
         """
-        # On calcule les totaux qui dépendent de la liste filtrée
         total_depenses_affiches = sum(d.montant for d in expense_list if not d.est_credit)
         total_effectue_affiches = sum(d.montant for d in expense_list if d.effectue and not d.est_credit)
         total_emprunte_affiches = sum(d.montant for d in expense_list if d.emprunte)
         total_depenses_fixes_affiches = sum(d.montant for d in expense_list if not d.est_credit and d.est_fixe)
-        nombre_depenses_affiches = sum(1 for d in expense_list if not d.est_credit)
+        nombre_lignes_affiches = len(expense_list)
 
-        # --- MODIFICATION : Calcul des revenus uniquement sur la liste affichée ---
-        total_revenus_affiches = sum(d.montant for d in expense_list if d.est_credit)
+        total_revenus_liste = sum(d.montant for d in expense_list if d.est_credit)
         
+        # Utilise le salaire "override" s'il est fourni, sinon celui du modèle
+        salaire_du_mois = self.salaire if salaire_override is None else salaire_override
         
+        argent_restant_affiche = total_revenus_liste - total_depenses_affiches
+
         return {
-            # Totaux basés sur la liste affichée
-            "nombre_depenses": nombre_depenses_affiches,
+            "nombre_depenses": nombre_lignes_affiches,
             "total_depenses": total_depenses_affiches,
             "total_effectue": total_effectue_affiches,
             "total_non_effectue": total_depenses_affiches - total_effectue_affiches,
             "total_emprunte": total_emprunte_affiches,
             "total_depenses_fixes": total_depenses_fixes_affiches,
-            # Totaux globaux qui ne changent pas avec la recherche
-            "total_revenus": total_revenus_affiches,
-            "argent_restant": self.get_argent_restant()
+            "total_revenus": total_revenus_liste,
+            "argent_restant": argent_restant_affiche
         }
 
     def _refresh_displayed_expenses(self):
@@ -266,6 +273,8 @@ class BudgetModel(Observable):
             
             self.mois_actuel = mois
             self._depenses = depenses
+
+            self._displayed_depenses = depenses.copy()
 
             self._current_search_term = "" # On réinitialise la recherche
             self._refresh_displayed_expenses() # On met à jour l'affichage
@@ -570,7 +579,9 @@ class BudgetModel(Observable):
         return sum(d.montant for d in self._depenses if d.emprunte)
     
     def get_argent_restant(self) -> float:
-        return self.salaire - self.get_total_depenses()
+        """Calcule l'argent restant comme : total_revenus - total_dépenses"""
+        return self.get_total_revenus() - self.get_total_depenses()
+
 
     def get_display_data(self) -> Optional[MoisDisplayData]:
         """Retourne un DTO avec toutes les données nécessaires pour l'affichage complet."""
