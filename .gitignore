@@ -1,6 +1,6 @@
 # Fichiers Python compilés
 __pycache__/
 
-env/
+venv/
 
 *.log
