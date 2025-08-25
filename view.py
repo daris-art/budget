@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
-from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QWheelEvent
+from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QCursor
 import logging
 from ui.custom_widgets import NoScrollComboBox
 
@@ -222,9 +222,8 @@ class BudgetView(QMainWindow):
         self.search_input.setClearButtonEnabled(True)
         self.search_input.setFixedWidth(180)
         # On connecte le signal de changement de texte au contrôleur
-        self.search_input.textChanged.connect(self.controller.handle_search_expenses)
+        self.search_input.textChanged.connect(self.controller.handle_search_input_changed)
         layout.addWidget(self.search_input)
-        
         layout.addStretch()
         
         layout.addWidget(QLabel("Trier par :"))
@@ -290,7 +289,7 @@ class BudgetView(QMainWindow):
         self.scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(self.scroll_area)
         
-        self.btn_add_expense = QPushButton("➕ Ajouter une dépense")
+        self.btn_add_expense = QPushButton("➕ Ajouter une opération")
         self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         main_layout.addWidget(self.btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
 
@@ -306,9 +305,14 @@ class BudgetView(QMainWindow):
         row_layout = QGridLayout(row_widget)
         row_layout.setContentsMargins(5, 2, 5, 2)
 
-        emoji_label = QLabel("🟢" if depense.est_credit else "🔴")
-        emoji_label.setToolTip("Revenu" if depense.est_credit else "Dépense")
-
+        type_button = QPushButton("🟢" if depense.est_credit else "🔴")
+        type_button.setToolTip("Cliquer pour basculer Revenu/Dépense")
+        type_button.setFlat(True) # Enlève l'arrière-plan du bouton
+        type_button.setStyleSheet("QPushButton { border: none; padding-left: 5px; }") # Enlève la bordure
+        type_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor)) # Montre une main au survol
+        # Connexion au nouveau handler du contrôleur
+        type_button.clicked.connect(lambda _, i=index: self.controller.handle_toggle_expense_type(i))
+        
         nom_input = QLineEdit(depense.nom)
         nom_input.setCursorPosition(0)
         
@@ -336,7 +340,7 @@ class BudgetView(QMainWindow):
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
 
-        row_layout.addWidget(emoji_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(type_button, 0, 0, Qt.AlignmentFlag.AlignCenter)
         row_layout.addWidget(nom_input, 0, 1)
         row_layout.addWidget(montant_input, 0, 2)
         row_layout.addWidget(date_input, 0, 3)
@@ -376,6 +380,24 @@ class BudgetView(QMainWindow):
 
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+
+    # --- AJOUT : Nouvelle méthode pour mettre à jour une ligne spécifique ---
+    def update_expense_row_display(self, index: int, new_data: dict):
+        """Met à jour l'affichage d'une seule ligne de dépense, par exemple l'émoji."""
+        if not (0 <= index < len(self.expense_rows)):
+            return
+
+        row_widget = self.expense_rows[index]
+        layout = row_widget.layout()
+
+        # Met à jour l'émoji si l'information est présente
+        if 'est_credit' in new_data:
+            type_button = layout.itemAtPosition(0, 0).widget()
+            if isinstance(type_button, QPushButton):
+                new_char = "🟢" if new_data['est_credit'] else "🔴"
+                type_button.setText(new_char)
+            # Met à jour la propriété interne pour les calculs en direct
+            row_widget.est_credit = new_data['est_credit']
 
     def _find_parent_row(self, widget: QWidget) -> Optional[QWidget]:
         """
@@ -636,10 +658,29 @@ class BudgetView(QMainWindow):
         for key, value in summary_data.items():
             if key in self.summary_labels:
                 label = self.summary_labels[key]
-                if key == "nombre_depenses":
-                    label.setText(str(int(value)))
+                text_to_display = ""
+                
+                if key == "total_depenses":
+                    count = summary_data.get("count_depenses", 0)
+                    text_to_display = f"{value:,.2f} € ({int(count)})".replace(",", " ")
+                
+                elif key == "total_revenus":
+                    count = summary_data.get("count_revenus", 0)
+                    text_to_display = f"{value:,.2f} € ({int(count)})".replace(",", " ")
+
+                elif key == "nombre_depenses":
+                    text_to_display = str(int(value))
+                
+                # Cas générique pour les autres valeurs monétaires
+                elif isinstance(value, (int, float)):
+                     text_to_display = f"{value:,.2f} €".replace(",", " ")
+                
+                # Fallback pour toute autre clé inattendue
                 else:
-                    label.setText(f"{value:,.2f} €".replace(",", " "))
+                    text_to_display = str(value)
+
+                label.setText(text_to_display)
+
                 label.setProperty("cssClass", "summaryValue")
                 if key == 'argent_restant':
                     label.setProperty("cssClass", "summaryValueNegative" if value < 0 else "summaryValuePositive")

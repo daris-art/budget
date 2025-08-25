@@ -32,6 +32,13 @@ class BudgetController:
         self.btc_thread = None
         self.btc_worker = None
 
+        # --- AJOUT : Timer pour la recherche différée ---
+        self.search_timer = QTimer()
+        self.search_timer.setSingleShot(True)
+        # On met une temporisation de 400ms. Ajustez si besoin.
+        self.search_timer.setInterval(400) 
+        self.search_timer.timeout.connect(self._perform_search)
+
     def set_view(self, view):
         """Associe la vue à ce contrôleur."""
         self.view = view
@@ -382,6 +389,10 @@ class BudgetController:
             self.view.refresh_expense_list(data['expenses'])
             self.view.update_summary_display(data['summary'])
             
+        elif event_type == 'expense_type_toggled':
+            # 'data' est un dictionnaire {'index': index, 'est_credit': nouvelle_valeur}
+            self.view.update_expense_row_display(data['index'], {'est_credit': data['est_credit']})
+
         elif event_type == 'theme_changed':
             self.view.apply_theme(data)
             
@@ -463,13 +474,36 @@ class BudgetController:
                 self.view.show_error_message(result.error)
                 self.view.update_status_bar(f"Erreur: {result.error}", is_error=True)
 
-    # --- NOUVEAU HANDLER POUR LA RECHERCHE ---
-    def handle_search_expenses(self, search_text: str):
+    # --- AJOUT des deux nouvelles méthodes pour la recherche différée ---
+    def handle_search_input_changed(self):
         """
-        Appelé à chaque fois que le texte dans le champ de recherche change.
+        Appelé à chaque frappe dans le champ de recherche.
+        Ne fait que redémarrer le minuteur.
         """
-        self.model.filter_depenses_by_name(search_text)
-        self.handle_live_update()
+        self.search_timer.start()
+
+    def _perform_search(self):
+        """
+        Exécute la recherche réelle. Appelé uniquement lorsque le minuteur
+        arrive à son terme.
+        """
+        if self.view:
+            search_text = self.view.search_input.text()
+            self.model.filter_depenses_by_name(search_text)
+            # Pas besoin d'appeler handle_live_update() ici, car 
+            # filter_depenses_by_name notifie déjà la vue avec
+            # 'display_updated', qui met à jour la liste ET le résumé.
+
+    # --- AJOUT : Nouveau handler pour le clic sur l'émoji ---
+    def handle_toggle_expense_type(self, index: int):
+        """
+        Gère le basculement du type d'une opération (crédit/débit)
+        lorsque l'utilisateur clique sur l'émoji.
+        """
+        result = self.model.toggle_expense_credit_status(index)
+        self._handle_result(result, show_success=False)
+        # On déclenche une mise à jour des totaux
+        self._schedule_live_update()
 
 
     

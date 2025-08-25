@@ -53,7 +53,10 @@ class BudgetModel(Observable):
         nombre_lignes_affiches = len(expense_list)
 
         total_revenus_liste = sum(d.montant for d in expense_list if d.est_credit)
-        
+
+         # --- AJOUT : Calculer le nombre de dépenses et de revenus ---
+        count_depenses = sum(1 for d in expense_list if not d.est_credit)
+        count_revenus = sum(1 for d in expense_list if d.est_credit)
         # Utilise le salaire "override" s'il est fourni, sinon celui du modèle
         salaire_du_mois = self.salaire if salaire_override is None else salaire_override
         
@@ -67,7 +70,9 @@ class BudgetModel(Observable):
             "total_emprunte": total_emprunte_affiches,
             "total_depenses_fixes": total_depenses_fixes_affiches,
             "total_revenus": total_revenus_liste,
-            "argent_restant": argent_restant_affiche
+            "argent_restant": argent_restant_affiche,
+            "count_depenses": count_depenses,
+            "count_revenus": count_revenus
         }
 
     def _refresh_displayed_expenses(self):
@@ -775,3 +780,37 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.warning(f"Impossible de récupérer la préférence de thème : {e}")
             return 'light'
+        
+    # --- AJOUT : Nouvelle méthode pour basculer le type de l'opération ---
+    def toggle_expense_credit_status(self, index: int) -> Result:
+        """Inverse le statut 'est_credit' d'une dépense et le sauvegarde."""
+        if not (0 <= index < len(self._displayed_depenses)):
+            return Result.error("Index de dépense invalide.")
+
+        # On récupère l'objet depuis la liste affichée pour trouver son ID
+        depense_to_toggle = self._displayed_depenses[index]
+        
+        # On trouve le même objet dans la liste source (_depenses) grâce à l'ID
+        original_depense = next((d for d in self._depenses if d.id == depense_to_toggle.id), None)
+        if not original_depense:
+            return Result.error("Impossible de trouver la dépense originale à mettre à jour.")
+
+        # On inverse la valeur booléenne
+        new_status = not original_depense.est_credit
+        original_depense.est_credit = new_status
+        depense_to_toggle.est_credit = new_status # On s'assure que les deux listes sont synchronisées
+
+        try:
+            # On réutilise la méthode de mise à jour existante qui sauvegarde l'objet entier
+            self._db_manager.update_depense(original_depense)
+            
+            # On notifie la vue pour qu'elle change juste l'émoji, sans tout redessiner
+            self.notify_observers('expense_type_toggled', {'index': index, 'est_credit': new_status})
+            
+            return Result.success()
+        except DatabaseError as e:
+            # En cas d'erreur de la base de données, on annule le changement en mémoire
+            original_depense.est_credit = not new_status
+            depense_to_toggle.est_credit = not new_status
+            return Result.error(str(e))
+    
