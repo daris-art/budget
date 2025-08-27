@@ -255,6 +255,8 @@ class BudgetModel(Observable):
                 id=mois_id
             )
             self._depenses = []
+            self._displayed_depenses = []  # ← AJOUT : Vider aussi la liste affichée
+            self._current_search_term = ""  # ← AJOUT : Réinitialiser la recherche
             
             self._save_last_mois(self.mois_actuel.nom)
             self.notify_observers('mois_created', self.mois_actuel)
@@ -606,6 +608,9 @@ class BudgetModel(Observable):
         
         total_depenses = self.get_total_depenses()
         total_effectue = self.get_total_depenses_effectuees()
+        total_revenus = self.get_total_revenus()
+        count_depenses = sum(1 for d in self._depenses if not d.est_credit)
+        count_revenus = sum(1 for d in self._depenses if d.est_credit)
         
         return MoisDisplayData(
             nom=self.mois_actuel.nom,
@@ -613,12 +618,14 @@ class BudgetModel(Observable):
             nombre_depenses=len(self._depenses), # <-- Ajout ici
             depenses=self._displayed_depenses, 
             total_depenses=total_depenses,
-            argent_restant=self.salaire - total_depenses,
+            argent_restant=total_revenus - total_depenses,
             total_effectue=total_effectue,
             total_non_effectue=total_depenses - total_effectue,
             total_emprunte=self.get_total_emprunte(),
             total_revenus=self.get_total_revenus(),
-            total_depenses_fixes=self.get_total_depenses_fixes()
+            total_depenses_fixes=self.get_total_depenses_fixes(),
+            count_depenses=count_depenses,
+            count_revenus=count_revenus
         )
     
     def get_summary_data(self) -> Dict[str, float]:

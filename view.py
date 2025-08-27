@@ -180,7 +180,7 @@ class BudgetView(QMainWindow):
         # S'assure que l'UI est fluide même avec beaucoup d'éléments
         QApplication.processEvents()
 
-    # --- MODIFICATION DE update_complete_display ---
+   
     def update_complete_display(self, display_data: Any):
         self.update_salary_display(display_data.salaire)
         
@@ -195,7 +195,9 @@ class BudgetView(QMainWindow):
             "total_non_effectue": display_data.total_non_effectue,
             "total_emprunte": display_data.total_emprunte,
             "total_revenus": display_data.total_revenus,
-            "total_depenses_fixes": display_data.total_depenses_fixes
+            "total_depenses_fixes": display_data.total_depenses_fixes,
+            "count_depenses": display_data.count_depenses,
+            "count_revenus": display_data.count_revenus
         }
         self.update_summary_display(summary)
 
@@ -662,11 +664,11 @@ class BudgetView(QMainWindow):
                 
                 if key == "total_depenses":
                     count = summary_data.get("count_depenses", 0)
-                    text_to_display = f"{value:,.2f} € ({int(count)})".replace(",", " ")
+                    text_to_display = f"{value:,.2f} €    ({int(count)})".replace(",", " ")
                 
                 elif key == "total_revenus":
                     count = summary_data.get("count_revenus", 0)
-                    text_to_display = f"{value:,.2f} € ({int(count)})".replace(",", " ")
+                    text_to_display = f"{value:,.2f} €    ({int(count)})".replace(",", " ")
 
                 elif key == "nombre_depenses":
                     text_to_display = str(int(value))
@@ -695,25 +697,6 @@ class BudgetView(QMainWindow):
         while self.expense_rows:
             row = self.expense_rows.pop()
             row.deleteLater()
-
-    def update_complete_display(self, display_data: Any):
-        self.update_salary_display(display_data.salaire)
-        self.clear_all_expenses()
-        for i, depense in enumerate(display_data.depenses):
-            self.add_expense_widget(depense, i)
-            if i % 15 == 0:
-                QApplication.processEvents()
-        summary = {
-            "nombre_depenses": display_data.nombre_depenses,
-            "total_depenses": display_data.total_depenses,
-            "argent_restant": display_data.argent_restant,
-            "total_effectue": display_data.total_effectue,
-            "total_non_effectue": display_data.total_non_effectue,
-            "total_emprunte": display_data.total_emprunte,
-            "total_revenus": display_data.total_revenus,
-            "total_depenses_fixes": display_data.total_depenses_fixes
-        }
-        self.update_summary_display(summary)
 
     def get_new_mois_input(self) -> Optional[Dict[str, str]]:
         nom, ok = QInputDialog.getText(self, "Nouveau Mois", "Entrez le nom du nouveau mois:")

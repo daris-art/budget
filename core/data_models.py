@@ -68,6 +68,8 @@ class MoisDisplayData:
     total_emprunte: float
     total_revenus: float
     total_depenses_fixes: float
+    count_depenses: int
+    count_revenus: int
 
 # ===== PATTERN OBSERVER =====
 class Observable:
