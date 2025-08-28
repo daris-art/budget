@@ -455,7 +455,7 @@ class BudgetModel(Observable):
     # ===== GESTION DES DÉPENSES =====
 
     def add_expense(self, nom: str = "", montant_str: str = "0", 
-               categorie: str = "Autres", effectue: bool = False, 
+               categorie: str = "Autres", effectue: bool = False, date_depense: str = datetime.now().strftime('%d/%m/%Y'),
                emprunte: bool = False, est_fixe: bool = False) -> Result:
         """
         MODIFICATION: Supprime l'appel redondant à _refresh_displayed_expenses.
@@ -464,13 +464,16 @@ class BudgetModel(Observable):
             return Result.error("Aucun mois chargé")
         
         try:
-            validation_result = self._validator.validate_expense_data(nom, montant_str, categorie)
+             # Passe la date au validateur
+            validation_result = self._validator.validate_expense_data(nom, montant_str, date_depense, categorie)
             if not validation_result.is_valid:
                 logger.warning(f"Données de dépense partiellement invalides: {validation_result.errors}")
-            
+                return Result.error("; ".join(validation_result.errors)) # Ajoutez cette ligne pour montrer l'erreur à l'utilisateur
+
             depense = Depense(
                 nom=validation_result.validated_data.get('nom', nom),
                 montant=validation_result.validated_data.get('montant', 0.0),
+                date_depense=validation_result.validated_data.get('date_depense'), 
                 categorie=validation_result.validated_data.get('categorie', categorie),
                 effectue=effectue,
                 emprunte=emprunte,
@@ -514,10 +517,10 @@ class BudgetModel(Observable):
         if not original_depense:
             return Result.error("Impossible de trouver la dépense originale à mettre à jour.")
 
-        validation = self._validator.validate_expense_data(nom, montant_str, categorie)
+        validation = self._validator.validate_expense_data(nom, montant_str, date_depense, categorie)
         if not validation.is_valid:
             return Result.error("\n".join(validation.errors))
-
+    
         # --- AJOUT : On garde en mémoire l'ancien statut de la bulle ---
         old_est_credit = original_depense.est_credit
         # Met à jour l'objet original

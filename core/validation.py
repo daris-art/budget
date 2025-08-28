@@ -1,6 +1,7 @@
 # core/validation.py
 
 from core.data_models import ValidationResult
+import datetime
 
 class DataValidator:
     """Validation centralisée des données de l'application."""
@@ -31,7 +32,7 @@ class DataValidator:
         )
     
     @staticmethod
-    def validate_expense_data(nom: str, montant: str, categorie: str) -> ValidationResult:
+    def validate_expense_data(nom: str, montant: str, date_depense: str, categorie: str) -> ValidationResult:
         errors = []
         validated_data = {}
         
@@ -45,7 +46,14 @@ class DataValidator:
         except (ValueError, AttributeError):
             errors.append("Le montant doit être un nombre valide")
             validated_data['montant'] = 0.0
-        
+         # NOUVEAU: Validation de la date
+        if not date_depense:
+            validated_data['date_depense'] = datetime.datetime.now().strftime('%d/%m/%Y')
+        elif not DataValidator._validate_date_string(date_depense):
+            errors.append("Format de date invalide. Utilisez JJ/MM/AAAA.")
+        else:
+            validated_data['date_depense'] = date_depense
+
         validated_data['categorie'] = categorie if categorie else "Autres"
         
         return ValidationResult(
@@ -53,3 +61,13 @@ class DataValidator:
             errors=errors,
             validated_data=validated_data
         )
+
+    @staticmethod
+    def _validate_date_string(date_str: str) -> bool:
+        """Vérifie si la chaîne de date est au format JJ/MM/AAAA et est une date valide."""
+        try:
+            # Utilise strptime pour analyser et valider la date
+            datetime.datetime.strptime(date_str, '%d/%m/%Y')
+            return True
+        except ValueError:
+            return False
