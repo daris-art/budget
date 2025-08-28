@@ -197,7 +197,8 @@ class BudgetView(QMainWindow):
             "total_revenus": display_data.total_revenus,
             "total_depenses_fixes": display_data.total_depenses_fixes,
             "count_depenses": display_data.count_depenses,
-            "count_revenus": display_data.count_revenus
+            "count_revenus": display_data.count_revenus,
+            "reste_apres_fixes": display_data.reste_apres_fixes
         }
         self.update_summary_display(summary)
 
@@ -550,7 +551,8 @@ class BudgetView(QMainWindow):
         extra_summary_layout = QFormLayout()
         extra_items = {
             "nombre_depenses": "Nombre de Lignes:",
-            "total_depenses_fixes": "Total Dépenses Fixes:"
+            "total_depenses_fixes": "Total Dépenses Fixes:",
+            "reste_apres_fixes": "Reste après Fixes:"
         }
         for key, text in extra_items.items():
             label = QLabel(text)
@@ -627,8 +629,9 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValue"] { color: #E0E0E0; }
                 QLabel[cssClass="summaryValueNegative"] { color: #F87171; }
                 QLabel[cssClass="summaryValuePositive"] { color: #4ADE80; }
+                QLabel[cssClass="summaryValueWarning"] { color: #FBBF24; } /* Jaune/Orange */
             """
-        else:
+        else: # Thème clair
             custom_styles = """
                 QPushButton#RedButton { background-color: #ffdddd; border: 1px solid #ff9999; }
                 QPushButton#RedButton:hover { background-color: #ffbbbb; }
@@ -637,6 +640,7 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValue"] { color: #000000; }
                 QLabel[cssClass="summaryValueNegative"] { color: #DC2626; }
                 QLabel[cssClass="summaryValuePositive"] { color: #16A34A; }
+                QLabel[cssClass="summaryValueWarning"] { color: #D97706; } /* Ambre/Orange foncé */
             """
         custom_styles += """QLabel[cssClass="shiftedHeader"] { padding-right: 25px; }"""
         final_stylesheet = qdarktheme.load_stylesheet(theme) + custom_styles
@@ -660,32 +664,42 @@ class BudgetView(QMainWindow):
         for key, value in summary_data.items():
             if key in self.summary_labels:
                 label = self.summary_labels[key]
-                text_to_display = ""
                 
+                # La logique pour formater le texte reste la même
+                text_to_display = ""
                 if key == "total_depenses":
                     count = summary_data.get("count_depenses", 0)
-                    text_to_display = f"{value:,.2f} €    ({int(count)})".replace(",", " ")
-                
+                    text_to_display = f"{value:,.2f} €   ({int(count)})".replace(",", " ")
                 elif key == "total_revenus":
                     count = summary_data.get("count_revenus", 0)
-                    text_to_display = f"{value:,.2f} €    ({int(count)})".replace(",", " ")
-
+                    text_to_display = f"{value:,.2f} €   ({int(count)})".replace(",", " ")
                 elif key == "nombre_depenses":
                     text_to_display = str(int(value))
-                
-                # Cas générique pour les autres valeurs monétaires
                 elif isinstance(value, (int, float)):
                      text_to_display = f"{value:,.2f} €".replace(",", " ")
-                
-                # Fallback pour toute autre clé inattendue
                 else:
                     text_to_display = str(value)
-
                 label.setText(text_to_display)
 
-                label.setProperty("cssClass", "summaryValue")
-                if key == 'argent_restant':
-                    label.setProperty("cssClass", "summaryValueNegative" if value < 0 else "summaryValuePositive")
+                # --- NOUVELLE LOGIQUE D'APPLICATION DES COULEURS ---
+                css_class = "summaryValue"  # Classe par défaut (couleur normale)
+                
+                if key == 'total_revenus':
+                    css_class = "summaryValuePositive"  # Vert
+                    
+                elif key in ['total_depenses', 'total_effectue', 'total_depenses_fixes']:
+                    css_class = "summaryValueNegative"  # Rouge
+                    
+                elif key in ['total_non_effectue', 'total_emprunte']:
+                    css_class = "summaryValueWarning"  # Orange/Jaune
+                    
+                elif key in ['argent_restant', 'reste_apres_fixes']:
+                    if value >= 0:
+                        css_class = "summaryValuePositive"  # Vert
+                    else:
+                        css_class = "summaryValueNegative"  # Rouge
+                
+                label.setProperty("cssClass", css_class)
                 label.style().polish(label)
 
     def remove_expense_widget(self, index: int):

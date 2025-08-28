@@ -70,6 +70,7 @@ class MoisDisplayData:
     total_depenses_fixes: float
     count_depenses: int
     count_revenus: int
+    reste_apres_fixes: float
 
 # ===== PATTERN OBSERVER =====
 class Observable:

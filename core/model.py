@@ -37,10 +37,6 @@ class BudgetModel(Observable):
         self._refresh_displayed_expenses()
 
     # --- NOUVELLE MÉTHODE PRIVÉE ---
-    # core/model.py
-
-    # core/model.py
-
     def _calculate_summary_for_list(self, expense_list: List[Depense], salaire_override: float = None) -> Dict[str, float]:
         """
         Calcule les totaux pour une liste de dépenses/revenus fournie.
@@ -53,6 +49,8 @@ class BudgetModel(Observable):
         nombre_lignes_affiches = len(expense_list)
 
         total_revenus_liste = sum(d.montant for d in expense_list if d.est_credit)
+
+        reste_apres_fixes = total_revenus_liste - total_depenses_fixes_affiches
 
          # --- AJOUT : Calculer le nombre de dépenses et de revenus ---
         count_depenses = sum(1 for d in expense_list if not d.est_credit)
@@ -72,7 +70,8 @@ class BudgetModel(Observable):
             "total_revenus": total_revenus_liste,
             "argent_restant": argent_restant_affiche,
             "count_depenses": count_depenses,
-            "count_revenus": count_revenus
+            "count_revenus": count_revenus,
+            "reste_apres_fixes": reste_apres_fixes
         }
 
     def _refresh_displayed_expenses(self):
@@ -609,6 +608,8 @@ class BudgetModel(Observable):
         total_depenses = self.get_total_depenses()
         total_effectue = self.get_total_depenses_effectuees()
         total_revenus = self.get_total_revenus()
+        total_depenses_fixes = self.get_total_depenses_fixes()
+        reste_apres_fixes = total_revenus - total_depenses_fixes
         count_depenses = sum(1 for d in self._depenses if not d.est_credit)
         count_revenus = sum(1 for d in self._depenses if d.est_credit)
         
@@ -623,9 +624,10 @@ class BudgetModel(Observable):
             total_non_effectue=total_depenses - total_effectue,
             total_emprunte=self.get_total_emprunte(),
             total_revenus=self.get_total_revenus(),
-            total_depenses_fixes=self.get_total_depenses_fixes(),
+            total_depenses_fixes=total_depenses_fixes,
             count_depenses=count_depenses,
-            count_revenus=count_revenus
+            count_revenus=count_revenus,
+            reste_apres_fixes=reste_apres_fixes
         )
     
     def get_summary_data(self) -> Dict[str, float]:
