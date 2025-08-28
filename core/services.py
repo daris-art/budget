@@ -168,8 +168,10 @@ class ImportExportService:
                 try:
                     if "credit" in col_indices and credit_val and float(credit_val) > 0:
                         montant, est_credit = float(credit_val), True
+                        categorie = "Revenue" # Définir la catégorie comme "Revenue" pour les crédits
                     elif "debit" in col_indices and debit_val and float(debit_val) > 0:
                         montant, est_credit = float(debit_val), False
+                        categorie = "Autres" # Ou toute autre catégorie par défaut pour les débits
                     else:
                         continue
                 except (ValueError, TypeError):
@@ -177,7 +179,7 @@ class ImportExportService:
                     continue
                 
                 operations_a_importer.append(
-                    Depense(nom=str(nom).strip(), montant=montant, date_depense=date_depense_str, est_credit=est_credit, effectue= True)
+                    Depense(nom=str(nom).strip(), montant=montant, categorie=categorie, date_depense=date_depense_str, est_credit=est_credit, effectue= True)
                 )
             
             # 1. On calcule le total des crédits qui servira de salaire initial
