@@ -401,6 +401,12 @@ class BudgetView(QMainWindow):
                 type_button.setText(new_char)
             # Met à jour la propriété interne pour les calculs en direct
             row_widget.est_credit = new_data['est_credit']
+        if 'categorie' in new_data:
+            # Le QComboBox est à la 5ème colonne (index 4)
+            cat_combo = layout.itemAtPosition(0, 4).widget()
+            if isinstance(cat_combo, QComboBox):
+                cat_combo.setCurrentText(new_data['categorie'])
+        
 
     def _find_parent_row(self, widget: QWidget) -> Optional[QWidget]:
         """

@@ -28,7 +28,7 @@ class BudgetModel(Observable):
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
         self._current_sort_key: str = "date_desc"
-        self.categories = ["Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
+        self.categories = ["Revenue", "Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
     def filter_depenses_by_name(self, search_text: str):
@@ -496,6 +496,8 @@ class BudgetModel(Observable):
         if not validation.is_valid:
             return Result.error("\n".join(validation.errors))
 
+        # --- AJOUT : On garde en mémoire l'ancien statut de la bulle ---
+        old_est_credit = original_depense.est_credit
         # Met à jour l'objet original
         original_depense.nom = validation.validated_data['nom']
         original_depense.montant = validation.validated_data['montant']
@@ -505,9 +507,15 @@ class BudgetModel(Observable):
         original_depense.emprunte = emprunte
         original_depense.est_fixe = est_fixe
 
-        try:
-            self._db_manager.update_depense(original_depense)
+        # --- AJOUT : Nouvelle logique pour piloter la bulle par la catégorie ---
+        if original_depense.categorie == "Revenue":
+            original_depense.est_credit = True
+        # Si la catégorie N'EST PAS "Revenue"
+        else:
+            original_depense.est_credit = False
             
+
+        try: 
             # MODIFICATION CRUCIALE: On met aussi à jour la liste affichée
             # pour que les deux listes restent synchronisées
             displayed_depense = self._displayed_depenses[index]
@@ -518,9 +526,17 @@ class BudgetModel(Observable):
             displayed_depense.effectue = effectue
             displayed_depense.emprunte = emprunte
             displayed_depense.est_fixe = est_fixe
-            
-            # SUPPRESSION: Plus de _refresh_displayed_expenses() qui provoquait le scintillement
-            # La mise à jour des totaux sera gérée par le contrôleur
+            displayed_depense.est_credit = original_depense.est_credit
+
+            self._db_manager.update_depense(original_depense)
+
+            if original_depense.est_credit != old_est_credit:
+                # On réutilise la notification existante, déjà gérée par la vue et le contrôleur
+                self.notify_observers('expense_type_toggled', {
+                    'index': index,
+                    'est_credit': original_depense.est_credit
+                })
+           
             
             return Result.success()
         except DatabaseError as e:
@@ -809,12 +825,24 @@ class BudgetModel(Observable):
         original_depense.est_credit = new_status
         depense_to_toggle.est_credit = new_status # On s'assure que les deux listes sont synchronisées
 
+        if new_status is True:  # Si l'opération devient un revenu
+            original_depense.categorie = "Revenue"
+            depense_to_toggle.categorie = "Revenue"
+        # Si l'opération redevient une dépense ET que sa catégorie était "Revenue"
+        elif new_status is False and original_depense.categorie == "Revenue":
+            original_depense.categorie = "Autres"  # On la remet par défaut
+            depense_to_toggle.categorie = "Autres"
+
         try:
             # On réutilise la méthode de mise à jour existante qui sauvegarde l'objet entier
             self._db_manager.update_depense(original_depense)
             
             # On notifie la vue pour qu'elle change juste l'émoji, sans tout redessiner
-            self.notify_observers('expense_type_toggled', {'index': index, 'est_credit': new_status})
+            self.notify_observers('expense_type_toggled', {
+                'index': index, 
+                'est_credit': new_status,
+                'categorie': original_depense.categorie  # Nouvelle information
+            })
             
             return Result.success()
         except DatabaseError as e:
