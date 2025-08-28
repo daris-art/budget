@@ -102,6 +102,7 @@ class BudgetView(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("Application de Budget (PyQt6)")
+        self.setMinimumWidth(1280) # Définit la largeur minimale à 1200 pixels
         screen = QApplication.primaryScreen()
         available_geometry = screen.availableGeometry()
         self.setGeometry(100, 100, 950, available_geometry.height())
@@ -227,6 +228,17 @@ class BudgetView(QMainWindow):
         # On connecte le signal de changement de texte au contrôleur
         self.search_input.textChanged.connect(self.controller.handle_search_input_changed)
         layout.addWidget(self.search_input)
+
+        layout.addWidget(QLabel("Par Date :"))
+        self.search_date_input = QLineEdit()
+        self.search_date_input.setPlaceholderText("JJ/MM/AAAA")
+        self.search_date_input.setInputMask("00/00/0000") # Masque de saisie
+        self.search_date_input.setClearButtonEnabled(True)
+        self.search_date_input.setFixedWidth(120)
+        # On connecte au MÊME gestionnaire que la recherche par nom
+        self.search_date_input.textChanged.connect(self.controller.handle_search_input_changed)
+        layout.addWidget(self.search_date_input)
+        
         layout.addStretch()
         
         layout.addWidget(QLabel("Trier par :"))
@@ -675,10 +687,10 @@ class BudgetView(QMainWindow):
                 text_to_display = ""
                 if key == "total_depenses":
                     count = summary_data.get("count_depenses", 0)
-                    text_to_display = f"{value:,.2f} €   ({int(count)})".replace(",", " ")
+                    text_to_display = f"{value:,.2f} €   ( {int(count)} )".replace(",", " ")
                 elif key == "total_revenus":
                     count = summary_data.get("count_revenus", 0)
-                    text_to_display = f"{value:,.2f} €   ({int(count)})".replace(",", " ")
+                    text_to_display = f"{value:,.2f} €   ( {int(count)} )".replace(",", " ")
                 elif key == "nombre_depenses":
                     text_to_display = str(int(value))
                 elif isinstance(value, (int, float)):

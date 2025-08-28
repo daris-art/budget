@@ -23,7 +23,8 @@ class BudgetModel(Observable):
         self._api_service = api_service
 
         self._displayed_depenses: List[Depense] = []  # AJOUT
-        self._current_search_term: str = ""     
+        self._current_search_term: str = "" 
+        self._current_search_date: str = ""
 
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
@@ -31,10 +32,17 @@ class BudgetModel(Observable):
         self.categories = ["Revenue", "Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
-    def filter_depenses_by_name(self, search_text: str):
-        """Met à jour le terme de recherche et rafraîchit la liste affichée."""
+    """ def filter_depenses_by_name(self, search_text: str, search_date: str):
         self._current_search_term = search_text.lower()
+        self._current_search_date = search_date
+        self._refresh_displayed_expenses() """
+    
+    def filter_depenses(self, search_text: str, search_date: str):
+        """Met à jour les critères de recherche (nom et date) et rafraîchit la liste affichée."""
+        self._current_search_term = search_text.lower()
+        self._current_search_date = search_date
         self._refresh_displayed_expenses()
+
 
     # --- NOUVELLE MÉTHODE PRIVÉE ---
     def _calculate_summary_for_list(self, expense_list: List[Depense], salaire_override: float = None) -> Dict[str, float]:
@@ -76,22 +84,36 @@ class BudgetModel(Observable):
 
     def _refresh_displayed_expenses(self):
         """
-        Applique le filtre et le tri actuels à la liste des dépenses
+        Applique les filtres (nom ET date) et le tri actuels à la liste des dépenses
         et notifie la vue pour qu'elle se mette à jour.
-        C'est la méthode centrale pour tout rafraîchissement de la liste.
         """
-        # 1. Filtrage basé sur le terme de recherche
+        # --- NOUVELLE LOGIQUE DE FILTRAGE EN CHAÎNE ---
+        # 1. On part toujours de la liste complète comme source
+        temp_list = self._depenses.copy()
+
+        # 2. On applique le filtre par nom, s'il y a un terme de recherche
         if self._current_search_term:
-            # On filtre la liste source (_depenses)
             temp_list = [
-                d for d in self._depenses 
+                d for d in temp_list 
                 if self._current_search_term in d.nom.lower()
             ]
-        else:
-            # Si la recherche est vide, on prend une copie de la liste complète
-            temp_list = self._depenses.copy()
 
-        # 2. Tri de la liste (filtrée ou non)
+        # On vérifie toujours que la date entrée contient au moins un chiffre
+        if self._current_search_date and any(c.isdigit() for c in self._current_search_date):
+            
+            # 1. On nettoie le critère de recherche pour enlever les placeholders
+            #    comme '_' et les '/' à la fin.
+            search_pattern = self._current_search_date.rstrip('_/')
+            
+            # 2. On filtre en vérifiant si la date de la dépense COMMENCE par le critère nettoyé.
+            #    C'est plus précis et efficace que de chercher une sous-chaîne.
+            temp_list = [
+                d for d in temp_list
+                if d.date_depense.startswith(search_pattern)
+            ]
+
+        
+        # 4. Tri de la liste (filtrée ou non)
         sort_key = self._current_sort_key
         try:
             if sort_key == "montant_desc":
@@ -122,10 +144,10 @@ class BudgetModel(Observable):
         # Mise à jour de la liste qui sera affichée
         self._displayed_depenses = temp_list
         
-        # 3. Calcul du résumé pour la liste filtrée et triée
+        # 5. Calcul du résumé pour la liste filtrée et triée
         summary_for_display = self._calculate_summary_for_list(self._displayed_depenses)
         
-        # 4. Notification à la vue avec un paquet de données complet
+        # 6. Notification à la vue avec un paquet de données complet
         update_data = {
             'expenses': self._displayed_depenses,
             'summary': summary_for_display

@@ -497,10 +497,9 @@ class BudgetController:
         """
         if self.view:
             search_text = self.view.search_input.text()
-            self.model.filter_depenses_by_name(search_text)
-            # Pas besoin d'appeler handle_live_update() ici, car 
-            # filter_depenses_by_name notifie déjà la vue avec
-            # 'display_updated', qui met à jour la liste ET le résumé.
+            search_date = self.view.search_date_input.text()
+            """ self.model.filter_depenses_by_name(search_text, search_date) """
+            self.model.filter_depenses(search_text=search_text, search_date=search_date)
 
     # --- AJOUT : Nouveau handler pour le clic sur l'émoji ---
     def handle_toggle_expense_type(self, index: int):
