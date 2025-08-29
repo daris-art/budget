@@ -493,6 +493,9 @@ class BudgetView(QMainWindow):
         if hasattr(self, 'expenses_container'):
             self.expenses_container.setEnabled(enabled)
 
+        if hasattr(self, 'btn_refresh_btc'):
+            self.btn_refresh_btc.setEnabled(enabled)
+
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):

@@ -203,7 +203,6 @@ class BudgetModel(Observable):
         return sum(d.montant for d in self._depenses if not d.est_credit and d.est_fixe)
 
 
-    # --- CORRECTION 2 : Suppression par ID ---
     def remove_expense_by_id(self, depense_id: int) -> Result:
         """Supprime une dépense en utilisant son ID unique."""
         try:
@@ -223,7 +222,7 @@ class BudgetModel(Observable):
                 # On notifie la vue pour qu'elle supprime la bonne ligne
                 self.notify_observers('expense_removed', {'index': index_to_remove})
 
-            self._refresh_displayed_expenses() # Rafraîchit l'affichage
+            # SUPPRIMER LA LIGNE SUIVANTE : self._refresh_displayed_expenses()
             
             return Result.success()
         except DatabaseError as e:
