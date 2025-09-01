@@ -183,8 +183,6 @@ class BudgetView(QMainWindow):
 
    
     def update_complete_display(self, display_data: Any):
-        self.update_salary_display(display_data.salaire)
-        
         # On utilise maintenant la nouvelle méthode pour afficher les dépenses
         self.refresh_expense_list(display_data.depenses)
         
@@ -209,14 +207,14 @@ class BudgetView(QMainWindow):
         group_box.setObjectName("SalaryActionsGroup")
         layout = QHBoxLayout()
         
-        layout.addWidget(QLabel("Salaire Mensuel (€):"))
+        """ layout.addWidget(QLabel("Salaire Mensuel (€):"))
         self.salaire_input = QLineEdit("0.0")
         self.salaire_input.setToolTip("Entrez le salaire ou revenu total du mois")
         self.salaire_input.setFixedWidth(150)
         self.salaire_input.setValidator(self.amount_validator)
         self.salaire_input.editingFinished.connect(self.controller.handle_set_salaire)
         self.salaire_input.textChanged.connect(self.controller.handle_live_update)
-        layout.addWidget(self.salaire_input)
+        layout.addWidget(self.salaire_input) """
 
 
         # --- AJOUT DU CHAMP DE RECHERCHE ---
@@ -678,9 +676,6 @@ class BudgetView(QMainWindow):
                 self.mois_selector_combo.setCurrentText(selected_mois)
         self.mois_selector_combo.blockSignals(False)
 
-    def update_salary_display(self, salaire: float):
-        self.salaire_input.setText(f"{salaire:.2f}")
-
     def update_summary_display(self, summary_data: Dict[str, float]):
         for key, value in summary_data.items():
             if key in self.summary_labels:
@@ -736,9 +731,7 @@ class BudgetView(QMainWindow):
     def get_new_mois_input(self) -> Optional[Dict[str, str]]:
         nom, ok = QInputDialog.getText(self, "Nouveau Mois", "Entrez le nom du nouveau mois:")
         if ok and nom:
-            salaire, ok = QInputDialog.getText(self, "Nouveau Mois", f"Entrez le salaire pour {nom}:", text="0.0")
-            if ok:
-                return {"nom": nom, "salaire": salaire}
+            return {"nom": nom}
         return None
 
     def ask_for_string(self, title: str, prompt: str, default_value: str = "") -> Optional[str]:

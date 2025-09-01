@@ -116,7 +116,7 @@ class BudgetController:
         try:
             mois_data = self.view.get_new_mois_input()
             if mois_data:
-                result = self.model.create_mois(mois_data['nom'], mois_data['salaire'])
+                result = self.model.create_mois(mois_data['nom'])
                 self._handle_result(result)
         except Exception as e:
             logger.error(f"Erreur lors de la création du mois: {e}")
@@ -177,15 +177,8 @@ class BudgetController:
 
     def handle_set_salaire(self):
         """Gère la mise à jour du salaire."""
-        if self.model.mois_actuel:
-            salaire_str = self.view.salaire_input.text()
-            try:
-                if float(salaire_str) != self.model.salaire:
-                    result = self.model.set_salaire(salaire_str)
-                    self._handle_result(result)
-            except (ValueError, TypeError):
-                 result = self.model.set_salaire(salaire_str)
-                 self._handle_result(result)
+        # Supprimé : Le salaire est maintenant un revenu comme les autres.
+        pass
 
     def handle_add_expense(self):
         """Gère l'ajout d'une nouvelle dépense."""

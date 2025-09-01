@@ -257,7 +257,7 @@ class BudgetModel(Observable):
         return self._depenses.copy()
     
     # ===== GESTION DES MOIS =====
-    def create_mois(self, nom: str, salaire_str: str) -> Result:
+    def create_mois(self, nom: str, salaire_str: str = "0") -> Result:
         """Crée un nouveau mois avec validation complète"""
         try:
             validation_result = self._validator.validate_mois_data(nom, salaire_str)
@@ -271,7 +271,7 @@ class BudgetModel(Observable):
             
             self.mois_actuel = Mois(
                 nom=validation_result.validated_data['nom'],
-                salaire=validation_result.validated_data['salaire'],
+                salaire= 0,
                 id=mois_id
             )
             self._depenses = []
