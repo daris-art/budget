@@ -1,6 +1,6 @@
 # graph_view.py (Version avec fermeture sur 'Échap')
 
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -15,6 +15,9 @@ class GraphDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Graphiques du Mois")
         self.setMinimumSize(800, 600)
+        # effet plus fluide
+        self.setWindowOpacity(0.95)
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint)
 
         # On récupère les données fournies par le contrôleur
         self.labels_by_name, self.values_by_name, _, self.categories_data, self.monthly_data = graph_data
@@ -32,6 +35,12 @@ class GraphDialog(QDialog):
         tab_widget.addTab(self._create_top_expenses_pie_chart_tab(), "Top Dépenses (Camembert)")
         tab_widget.addTab(self._create_monthly_trends_tab(), "Tendances Mensuelles")
 
+        button_layout = QHBoxLayout()
+        close_button = QPushButton("Fermer")
+        close_button.clicked.connect(self.reject)
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        main_layout.addLayout(button_layout)
 
     def _create_pie_chart_tab(self) -> QWidget:
         """Crée l'onglet contenant le graphique en camembert des catégories."""
