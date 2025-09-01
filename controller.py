@@ -511,6 +511,3 @@ class BudgetController:
         self._handle_result(result, show_success=False)
         # On déclenche une mise à jour des totaux
         self._schedule_live_update()
-
-
-    

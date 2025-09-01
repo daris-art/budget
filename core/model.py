@@ -686,7 +686,7 @@ class BudgetModel(Observable):
             "total_depenses_fixes": self.get_total_depenses_fixes()
         }
     
-    def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float]]:
+    def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float], List[Dict]]:
         """
         Prépare les données pour les graphiques en excluant les crédits (revenus)
         et en tronquant les libellés trop longs.
@@ -697,7 +697,7 @@ class BudgetModel(Observable):
         ]
         
         if not valid_expenses:
-            return [], [], 0.0, {}
+            return [], [], 0.0, {}, []
         
         # --- MODIFICATION 1 : Tronquer les noms de dépenses pour le graphique en barres ---
         # On utilise une expression conditionnelle pour ajouter "..." uniquement si le nom est trop long.
@@ -715,7 +715,17 @@ class BudgetModel(Observable):
             categorie_label = (d.categorie[:21] + '...') if len(d.categorie) > 21 else d.categorie
             categories_data[categorie_label] = categories_data.get(categorie_label, 0) + d.montant
         
-        return labels, values, argent_restant, categories_data
+        monthly_trends = self.get_monthly_trends_data()
+
+        return labels, values, argent_restant, categories_data, monthly_trends
+    
+    def get_monthly_trends_data(self) -> List[Dict]:
+        """Récupère les données de revenus et de dépenses pour tous les mois."""
+        try:
+            return self._db_manager.get_all_monthly_summary()
+        except DatabaseError as e:
+            logger.error(f"Erreur DB lors de la récupération des tendances mensuelles: {e}")
+            return []
         
     # ===== IMPORT/EXPORT =====
     def export_to_json(self, filepath: Path) -> Result:
@@ -874,4 +884,3 @@ class BudgetModel(Observable):
             original_depense.est_credit = not new_status
             depense_to_toggle.est_credit = not new_status
             return Result.error(str(e))
-    

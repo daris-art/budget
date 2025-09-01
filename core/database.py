@@ -409,3 +409,50 @@ class DatabaseManager:
                     raise DatabaseError(f"Erreur durant la transaction d'import, annulation : {e}")
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur de connexion lors de l'import : {e}")
+
+    # AJOUT: Nouvelle méthode pour récupérer les données mensuelles agrégées
+    def get_all_monthly_summary(self) -> List[dict]:
+        """
+        Récupère un résumé des revenus et dépenses pour tous les mois.
+        Trie les résultats par date de création du mois.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row  # Permet d'accéder aux colonnes par leur nom
+                cursor = conn.cursor()
+                
+                # Requête SQL pour agréger les données
+                sql = """
+                    SELECT
+                        m.nom AS mois_nom,
+                        m.salaire AS salaire,
+                        m.date_creation AS date_creation,
+                        SUM(CASE WHEN d.est_credit = 1 THEN d.montant ELSE 0 END) AS total_revenus,
+                        SUM(CASE WHEN d.est_credit = 0 THEN d.montant ELSE 0 END) AS total_depenses
+                    FROM
+                        mois m
+                    LEFT JOIN
+                        depenses d ON m.id = d.mois_id
+                    GROUP BY
+                        m.id
+                    ORDER BY
+                        m.date_creation ASC
+                """
+                cursor.execute(sql)
+                rows = cursor.fetchall()
+                
+                # Formater les résultats dans une liste de dictionnaires
+                result_list = []
+                for row in rows:
+                    # On utilise les noms de colonnes pour extraire les données
+                    result_list.append({
+                        "mois": row["mois_nom"],
+                        "revenus": row["total_revenus"],
+                        "depenses": row["total_depenses"],
+                        "date_creation": row["date_creation"]
+                    })
+                
+                return result_list
+
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Erreur lors de la récupération des tendances mensuelles : {e}")

@@ -17,7 +17,7 @@ class GraphDialog(QDialog):
         self.setMinimumSize(800, 600)
 
         # On récupère les données fournies par le contrôleur
-        self.labels_by_name, self.values_by_name, _, self.categories_data = graph_data
+        self.labels_by_name, self.values_by_name, _, self.categories_data, self.monthly_data = graph_data
         
         # Le conteneur principal de la fenêtre
         main_layout = QVBoxLayout(self)
@@ -30,6 +30,8 @@ class GraphDialog(QDialog):
         tab_widget.addTab(self._create_pie_chart_tab(), "Dépenses par Catégorie")
         tab_widget.addTab(self._create_bar_chart_tab(), "Top 10 Dépenses (Barres)")
         tab_widget.addTab(self._create_top_expenses_pie_chart_tab(), "Top Dépenses (Camembert)")
+        tab_widget.addTab(self._create_monthly_trends_tab(), "Tendances Mensuelles")
+
 
     def _create_pie_chart_tab(self) -> QWidget:
         """Crée l'onglet contenant le graphique en camembert des catégories."""
@@ -132,6 +134,42 @@ class GraphDialog(QDialog):
         fig.tight_layout()
         return tab
 
+    def _create_monthly_trends_tab(self) -> QWidget:
+        """Crée un onglet avec un graphique montrant l'évolution mensuelle des revenus, dépenses et de l'épargne."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        fig = Figure(figsize=(8, 6))
+        canvas = FigureCanvas(fig)
+        layout.addWidget(canvas)
+        
+        ax = fig.add_subplot(111)
+
+        # Les données sont un dictionnaire avec les clés 'mois', 'revenus' et 'depenses'
+        months = [data['mois'] for data in self.monthly_data]
+        revenues = [data['revenus'] for data in self.monthly_data]
+        expenses = [data['depenses'] for data in self.monthly_data]
+        net_balance = [rev - exp for rev, exp in zip(revenues, expenses)]
+
+        x = range(len(months))
+        width = 0.25
+
+        ax.bar([i - width for i in x], revenues, width, label='Revenus', color='g', alpha=0.7)
+        ax.bar(x, expenses, width, label='Dépenses', color='r', alpha=0.7)
+        ax.bar([i + width for i in x], net_balance, width, label='Solde Net', color='b', alpha=0.7)
+
+        ax.set_title("Tendances Financières Mensuelles", pad=20)
+        ax.set_ylabel("Montant (€)")
+        ax.set_xlabel("Mois")
+        ax.set_xticks(x)
+        ax.set_xticklabels(months, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(axis='y', linestyle='--', alpha=0.6)
+        
+        fig.tight_layout()
+        
+        return tab
+        
     def keyPressEvent(self, event: QKeyEvent):
         """Ferme la fenêtre si la touche 'Échap' est pressée."""
         if event.key() == Qt.Key.Key_Escape:
