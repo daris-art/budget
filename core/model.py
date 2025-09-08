@@ -25,7 +25,9 @@ class BudgetModel(Observable):
         self._displayed_depenses: List[Depense] = []  # AJOUT
         self._current_search_term: str = "" 
         self._current_search_date: str = ""
-        self._current_search_amount: Optional[float] = None
+        self._current_search_amount_min: Optional[float] = None # NOUVEAU
+        self._current_search_amount_max: Optional[float] = None # NOUVEAU
+        
 
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
@@ -34,20 +36,28 @@ class BudgetModel(Observable):
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
     
-    def filter_depenses(self, search_text: str, search_date: str, search_amount: str):
+    def filter_depenses(self, search_text: str, search_date: str, search_amount_min: str, search_amount_max: str):
         """Met à jour les critères de recherche (nom et date) et rafraîchit la liste affichée."""
         self._current_search_term = search_text.lower()
         self._current_search_date = search_date
         try:
-            # Convertir le montant en float pour le filtrage
-            if search_amount:
-                self._current_search_amount = float(search_amount.replace(',', '.'))
+            # Convertir les montants en float pour le filtrage
+            if search_amount_min:
+                self._current_search_amount_min = float(search_amount_min.replace(',', '.'))
             else:
-                self._current_search_amount = None
+                self._current_search_amount_min = None
+            
+            if search_amount_max:
+                self._current_search_amount_max = float(search_amount_max.replace(',', '.'))
+            else:
+                self._current_search_amount_max = None
         except (ValueError, AttributeError):
-            # Si la saisie n'est pas un nombre valide, ignorer le filtre de montant
-            self._current_search_amount = None
+            # Si la saisie n'est pas un nombre valide, ignorer les filtres de montant
+            self._current_search_amount_min = None
+            self._current_search_amount_max = None
+
         self._refresh_displayed_expenses()
+
 
 
     # --- NOUVELLE MÉTHODE PRIVÉE ---
@@ -118,11 +128,13 @@ class BudgetModel(Observable):
                 if d.date_depense.startswith(search_pattern)
             ]
 
-        # 3. NOUVEAU: Filtre par montant
-        if self._current_search_amount is not None:
+        # 3. NOUVEAU: Filtre par montant (intervalle)
+        # Si un des deux champs est rempli, on filtre
+        if self._current_search_amount_min is not None or self._current_search_amount_max is not None:
             temp_list = [
                 d for d in temp_list
-                if d.montant == self._current_search_amount
+                if (self._current_search_amount_min is None or d.montant >= self._current_search_amount_min) and
+                   (self._current_search_amount_max is None or d.montant <= self._current_search_amount_max)
             ]
 
         

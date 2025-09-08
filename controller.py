@@ -491,10 +491,16 @@ class BudgetController:
         if self.view:
             search_text = self.view.search_input.text()
             search_date = self.view.search_date_input.text()
-            search_amount = self.view.search_amount_input.text() 
-
-            self.model.filter_depenses(search_text=search_text, search_date=search_date, search_amount=search_amount)
-
+            search_amount_min = self.view.search_amount_min_input.text() # NOUVEAU
+            search_amount_max = self.view.search_amount_max_input.text() # NOUVEAU
+            
+            self.model.filter_depenses(
+                search_text=search_text, 
+                search_date=search_date, 
+                search_amount_min=search_amount_min, # NOUVEAU
+                search_amount_max=search_amount_max # NOUVEAU
+            )
+            
     # --- AJOUT : Nouveau handler pour le clic sur l'émoji ---
     def handle_toggle_expense_type(self, index: int):
         """
