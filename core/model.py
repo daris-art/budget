@@ -25,6 +25,7 @@ class BudgetModel(Observable):
         self._displayed_depenses: List[Depense] = []  # AJOUT
         self._current_search_term: str = "" 
         self._current_search_date: str = ""
+        self._current_search_amount: Optional[float] = None
 
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
@@ -32,15 +33,20 @@ class BudgetModel(Observable):
         self.categories = ["Revenue", "Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
-    """ def filter_depenses_by_name(self, search_text: str, search_date: str):
-        self._current_search_term = search_text.lower()
-        self._current_search_date = search_date
-        self._refresh_displayed_expenses() """
     
-    def filter_depenses(self, search_text: str, search_date: str):
+    def filter_depenses(self, search_text: str, search_date: str, search_amount: str):
         """Met à jour les critères de recherche (nom et date) et rafraîchit la liste affichée."""
         self._current_search_term = search_text.lower()
         self._current_search_date = search_date
+        try:
+            # Convertir le montant en float pour le filtrage
+            if search_amount:
+                self._current_search_amount = float(search_amount.replace(',', '.'))
+            else:
+                self._current_search_amount = None
+        except (ValueError, AttributeError):
+            # Si la saisie n'est pas un nombre valide, ignorer le filtre de montant
+            self._current_search_amount = None
         self._refresh_displayed_expenses()
 
 
@@ -110,6 +116,13 @@ class BudgetModel(Observable):
             temp_list = [
                 d for d in temp_list
                 if d.date_depense.startswith(search_pattern)
+            ]
+
+        # 3. NOUVEAU: Filtre par montant
+        if self._current_search_amount is not None:
+            temp_list = [
+                d for d in temp_list
+                if d.montant == self._current_search_amount
             ]
 
         

@@ -236,6 +236,16 @@ class BudgetView(QMainWindow):
         # On connecte au MÊME gestionnaire que la recherche par nom
         self.search_date_input.textChanged.connect(self.controller.handle_search_input_changed)
         layout.addWidget(self.search_date_input)
+
+        # --- NOUVEAU: CHAMP DE RECHERCHE PAR MONTANT ---
+        layout.addWidget(QLabel("Par Montant (€) :"))
+        self.search_amount_input = QLineEdit()
+        self.search_amount_input.setPlaceholderText("Filtrer par montant...")
+        self.search_amount_input.setClearButtonEnabled(True)
+        self.search_amount_input.setValidator(self.amount_validator)
+        self.search_amount_input.setFixedWidth(120)
+        self.search_amount_input.textChanged.connect(self.controller.handle_search_input_changed)
+        layout.addWidget(self.search_amount_input)
         
         layout.addStretch()
         

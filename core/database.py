@@ -107,9 +107,7 @@ class DatabaseManager:
                 return None
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération du mois: {e}")
-    
-    # Dans utils.py, à l'intérieur de la classe DatabaseManager, remplacez cette méthode :
-
+ 
     def delete_mois(self, nom: str) -> bool:
         """
         Supprime un mois et toutes ses dépenses associées en deux étapes explicites
