@@ -32,7 +32,7 @@ class BudgetModel(Observable):
         self.mois_actuel: Optional[Mois] = None
         self._depenses: List[Depense] = []
         self._current_sort_key: str = "date_desc"
-        self.categories = ["Revenue", "Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Autres"]
+        self.categories = ["Revenue", "Alimentation", "Logement", "Transport", "Loisirs", "Santé", "Factures", "Shopping", "Épargne", "Tabac", "Autres"]
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
     
