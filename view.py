@@ -608,10 +608,25 @@ class BudgetView(QMainWindow):
         left_layout.addWidget(separator3)
         left_layout.addSpacing(10)
 
+        # Regrouper les boutons dans une colonne verticale
+        buttons_layout = QVBoxLayout()
+
         self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
         self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
-        left_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
+        buttons_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self.btn_import_alsace_excel = QPushButton("📥 Importer Excel (Alsace)")
+        self.btn_import_alsace_excel.clicked.connect(self.controller.handle_import_from_alsace_excel)
+        buttons_layout.addWidget(self.btn_import_alsace_excel, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # --- Forcer les 2 boutons à avoir la même largeur ---
+        max_width = max(self.btn_voir_graphiques.sizeHint().width(),
+                        self.btn_import_alsace_excel.sizeHint().width())
+        self.btn_voir_graphiques.setMinimumWidth(max_width)
+        self.btn_import_alsace_excel.setMinimumWidth(max_width)
+
+        left_layout.addLayout(buttons_layout)
         
         main_layout.addWidget(left_container)
         main_layout.addStretch()

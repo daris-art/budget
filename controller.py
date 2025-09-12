@@ -110,6 +110,37 @@ class BudgetController:
         self.import_thread.finished.connect(self.import_thread.deleteLater)
 
         QTimer.singleShot(100, self.import_thread.start)
+
+    def handle_import_from_alsace_excel(self):
+        """Gère l'import d'un fichier Excel format Alsace."""
+        filepath = self.view.get_excel_import_filepath()
+        if not filepath:
+            return
+
+        default_name = f"Alsace {filepath.stem} {datetime.now().strftime('%B %Y')}"
+        new_name = self.view.ask_for_string("Nouveau mois Alsace", "Nom du mois :", default_name)
+        if not new_name:
+            return
+
+        self.view.set_month_actions_enabled(False)
+        self.view.update_status_bar(f"Importation Alsace '{filepath.name}'...", duration=0)
+        self.view.show_progress_bar(indeterminate=True)
+        QApplication.processEvents()
+
+        from workers.task_workers import AlsaceExcelImportWorker
+        self.import_thread = QThread()
+        self.import_worker = AlsaceExcelImportWorker(self.model, filepath, new_name)
+        self.import_worker.moveToThread(self.import_thread)
+
+        self.import_thread.started.connect(self.import_worker.run)
+        self.import_worker.finished.connect(self._on_import_excel_finished)
+
+        self.import_worker.finished.connect(self.import_thread.quit)
+        self.import_worker.finished.connect(self.import_worker.deleteLater)
+        self.import_thread.finished.connect(self.import_thread.deleteLater)
+
+        QTimer.singleShot(100, self.import_thread.start)
+
     
     def handle_create_mois(self):
         """Gère la création d'un nouveau mois."""
