@@ -203,7 +203,7 @@ class BudgetView(QMainWindow):
 
 
     def _create_salary_section(self) -> QGroupBox:
-        group_box = QGroupBox("Salaire et Actions")
+        group_box = QGroupBox("Recherche et Trie")
         group_box.setObjectName("SalaryActionsGroup")
         layout = QHBoxLayout()
         
@@ -280,7 +280,7 @@ class BudgetView(QMainWindow):
         return group_box
 
     def _create_expenses_section(self) -> QGroupBox:
-        group_box = QGroupBox("Dépenses")
+        group_box = QGroupBox("Opérations")
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()

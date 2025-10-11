@@ -244,10 +244,18 @@ class BudgetModel(Observable):
             
             if index_to_remove != -1:
                 self._depenses.pop(index_to_remove)
-                # On notifie la vue pour qu'elle supprime la bonne ligne
-                self.notify_observers('expense_removed', {'index': index_to_remove})
 
-            # SUPPRIMER LA LIGNE SUIVANTE : self._refresh_displayed_expenses()
+            # CORRECTION : On trouve aussi l'index dans la liste affichée
+            index_displayed = -1
+            for i, dep in enumerate(self._displayed_depenses):
+                if dep.id == depense_id:
+                    index_displayed = i
+                    break
+            
+            if index_displayed != -1:
+                self._displayed_depenses.pop(index_displayed)
+                # On notifie avec l'index de la liste AFFICHÉE
+                self.notify_observers('expense_removed', {'index': index_displayed})
             
             return Result.success()
         except DatabaseError as e:
