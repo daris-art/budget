@@ -945,6 +945,7 @@ class BudgetView(QMainWindow):
                 line_number_widget.setText(f"{i + 1:>3}")
 
     def clear_all_expenses(self):
+        self.clear_expense_selection()
         while self.expense_rows:
             row = self.expense_rows.pop()
             row.deleteLater()
