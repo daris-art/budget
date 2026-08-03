@@ -10,8 +10,8 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QScrollArea, QMessageBox,
     QInputDialog, QFileDialog, QGroupBox, QFrame, QProgressBar, QDialog
 )
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale
-from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QCursor
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale, QEvent, QObject
+from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QCursor, QShortcut, QKeySequence
 import logging
 from ui.custom_widgets import NoScrollComboBox
 
@@ -90,6 +90,9 @@ class BudgetView(QMainWindow):
         self.controller = controller
         self.expense_rows: List[QWidget] = []
         self.summary_labels: Dict[str, QLabel] = {}
+        self.selected_row_indices: List[int] = []
+        self.last_selected_index: Optional[int] = None
+        self.selected_rows_total_label: Optional[QLabel] = None
         self._scroll_on_range_change = False
 
         self.amount_validator = QDoubleValidator(0.00, 999999999.99, 2)
@@ -177,7 +180,7 @@ class BudgetView(QMainWindow):
         self.clear_all_expenses()
         for i, depense in enumerate(expenses_to_display):
             self.add_expense_widget(depense, i)
-        
+        self._refresh_expense_line_numbers()
         # S'assure que l'UI est fluide même avec beaucoup d'éléments
         QApplication.processEvents()
 
@@ -284,7 +287,7 @@ class BudgetView(QMainWindow):
         main_layout = QVBoxLayout()
 
         header_layout = QGridLayout()
-        headers = ["Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Fixe", "Actions"]
+        headers = ["N°", "Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Fixe", "Actions"]
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
             
@@ -300,15 +303,16 @@ class BudgetView(QMainWindow):
             
             header_layout.addWidget(label, 0, i, alignment)
         
-        header_layout.setColumnStretch(0, 0)  # Type
-        header_layout.setColumnStretch(1, 6)  # Nom
-        header_layout.setColumnStretch(2, 2)  # Montant
-        header_layout.setColumnStretch(3, 2)  # Date
-        header_layout.setColumnStretch(4, 2)  # Catégorie (réduit de 3 à 2)
-        header_layout.setColumnStretch(5, 1)  # Payé
-        header_layout.setColumnStretch(6, 1)  # Prêt
-        header_layout.setColumnStretch(7, 1)  # Fixe (nouveau)
-        header_layout.setColumnStretch(8, 1)  # Actions (index décalé)
+        header_layout.setColumnStretch(0, 0)  # Numéro de ligne
+        header_layout.setColumnStretch(1, 0)  # Type
+        header_layout.setColumnStretch(2, 6)  # Nom
+        header_layout.setColumnStretch(3, 2)  # Montant
+        header_layout.setColumnStretch(4, 2)  # Date
+        header_layout.setColumnStretch(5, 2)  # Catégorie (réduit de 3 à 2)
+        header_layout.setColumnStretch(6, 1)  # Payé
+        header_layout.setColumnStretch(7, 1)  # Prêt
+        header_layout.setColumnStretch(8, 1)  # Fixe
+        header_layout.setColumnStretch(9, 1)  # Actions
         main_layout.addLayout(header_layout)
 
         self.scroll_area = ExpenseScrollArea(self) # On passe 'self' (la vue) en référence
@@ -321,9 +325,15 @@ class BudgetView(QMainWindow):
         self.scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(self.scroll_area)
         
-        self.btn_add_expense = QPushButton("➕ Ajouter une opération")
+        self.btn_add_expense = QPushButton("➕ Ajouter une opération (Ctrl + A)")
         self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         main_layout.addWidget(self.btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
+        
+        # --- NOUVEAU : Raccourci Ctrl+A pour ajouter une opération ---
+        self.shortcut_add_expense = QShortcut(QKeySequence("Ctrl+A"), self)
+        self.shortcut_add_expense.activated.connect(self.btn_add_expense.click)
+        # Note : On simule un clic sur le bouton, ce qui appellera proprement 
+        # le handler de votre contrôleur.
 
         group_box.setLayout(main_layout)
         return group_box
@@ -347,15 +357,26 @@ class BudgetView(QMainWindow):
         
         nom_input = QLineEdit(depense.nom)
         nom_input.setCursorPosition(0)
+        nom_input.setStyleSheet("font-size: 14px;")
         
         montant_text = "" if depense.montant == 0.0 else str(depense.montant)
         montant_input = QLineEdit(montant_text)
         montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
         montant_input.setValidator(self.amount_validator)
-        
+        # --- NOUVEAU : Style conditionnel pour les revenus (🟢) ---
+        if depense.est_credit:
+            # Applique la couleur verte et le texte en gras via une feuille de style CSS/Qt
+            montant_input.setStyleSheet("font-size: 14px; color: #4ADE80;")            # Note : #4ADE80 est le vert clair que vous utilisez déjà pour votre thème sombre.
+            # Si vous préférez un vert plus standard, vous pouvez mettre "color: green;"
+        else:
+            # On remet le style par défaut pour les dépenses normales
+            montant_input.setStyleSheet("font-size: 14px;")
+
         date_input = QLineEdit(depense.date_depense)
         date_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         date_input.setInputMask("00/00/0000")
+        #: Augmenter la taille de la police pour la date ---
+        date_input.setStyleSheet("font-size: 14px;")
         
         if not depense.date_depense:
             QTimer.singleShot(0, date_input.clear)
@@ -363,34 +384,58 @@ class BudgetView(QMainWindow):
         cat_combo = NoScrollComboBox() 
         cat_combo.addItems(self.controller.model.categories)
         cat_combo.setCurrentText(depense.categorie)
+        cat_combo.setStyleSheet("font-size: 14px;")
+
+        # Style commun pour agrandir l'indicateur des cases à cocher
+        checkbox_style = """
+            QCheckBox::indicator {
+                width: 22px;
+                height: 22px;
+            }
+        """
+
         effectue_check = QCheckBox()
         effectue_check.setChecked(depense.effectue)
+        effectue_check.setStyleSheet(checkbox_style) # <-- AJOUT
+
         emprunte_check = QCheckBox()
         emprunte_check.setChecked(depense.emprunte)
+        emprunte_check.setStyleSheet(checkbox_style) # <-- AJOUT
+
         fixe_check = QCheckBox()
         fixe_check.setChecked(depense.est_fixe)
+        fixe_check.setStyleSheet(checkbox_style) # <-- AJOUT
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
 
-        row_layout.addWidget(type_button, 0, 0, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(nom_input, 0, 1)
-        row_layout.addWidget(montant_input, 0, 2)
-        row_layout.addWidget(date_input, 0, 3)
-        row_layout.addWidget(cat_combo, 0, 4)
-        row_layout.addWidget(effectue_check, 0, 5, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(emprunte_check, 0, 6, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(fixe_check, 0, 7, Qt.AlignmentFlag.AlignCenter)
-        row_layout.addWidget(btn_supprimer_depense, 0, 8)
+        line_number_label = QLabel(f"{index + 1:>3}")
+        line_number_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        line_number_label.setStyleSheet(
+            "font-weight: bold; font-size: 13px; font-family: 'Courier New', monospace;"
+        )
+        line_number_label.setMinimumWidth(36)
+
+        row_layout.addWidget(line_number_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(type_button, 0, 1, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(nom_input, 0, 2)
+        row_layout.addWidget(montant_input, 0, 3)
+        row_layout.addWidget(date_input, 0, 4)
+        row_layout.addWidget(cat_combo, 0, 5)
+        row_layout.addWidget(effectue_check, 0, 6, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(emprunte_check, 0, 7, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(fixe_check, 0, 8, Qt.AlignmentFlag.AlignCenter)
+        row_layout.addWidget(btn_supprimer_depense, 0, 9)
 
         row_layout.setColumnStretch(0, 0)
-        row_layout.setColumnStretch(1, 6)
-        row_layout.setColumnStretch(2, 2)
+        row_layout.setColumnStretch(1, 0)
+        row_layout.setColumnStretch(2, 6)
         row_layout.setColumnStretch(3, 2)
         row_layout.setColumnStretch(4, 2)
-        row_layout.setColumnStretch(5, 1)
+        row_layout.setColumnStretch(5, 2)
         row_layout.setColumnStretch(6, 1)
         row_layout.setColumnStretch(7, 1)
         row_layout.setColumnStretch(8, 1)
+        row_layout.setColumnStretch(9, 1)
 
         # CONNEXIONS OPTIMISÉES:
         # Sauvegarde uniquement à la fin de l'édition
@@ -410,6 +455,7 @@ class BudgetView(QMainWindow):
         
         btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
 
+        self._install_row_event_filters(row_widget)
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
 
@@ -424,15 +470,22 @@ class BudgetView(QMainWindow):
 
         # Met à jour l'émoji si l'information est présente
         if 'est_credit' in new_data:
-            type_button = layout.itemAtPosition(0, 0).widget()
+            type_button = layout.itemAtPosition(0, 1).widget()
             if isinstance(type_button, QPushButton):
                 new_char = "🟢" if new_data['est_credit'] else "🔴"
                 type_button.setText(new_char)
             # Met à jour la propriété interne pour les calculs en direct
             row_widget.est_credit = new_data['est_credit']
+            # --- NOUVEAU : Dynamiser la couleur du montant lors du clic sur l'émoji ---
+            montant_input = layout.itemAtPosition(0, 3).widget()
+            if isinstance(montant_input, QLineEdit):
+                if new_data['est_credit']:
+                    montant_input.setStyleSheet("font-size: 14px; color: #4ADE80;")
+                else:
+                    montant_input.setStyleSheet("font-size: 14px;") # Réinitialise pour les dépenses
         if 'categorie' in new_data:
-            # Le QComboBox est à la 5ème colonne (index 4)
-            cat_combo = layout.itemAtPosition(0, 4).widget()
+            # Le QComboBox est à la 6ème colonne (index 5)
+            cat_combo = layout.itemAtPosition(0, 5).widget()
             if isinstance(cat_combo, QComboBox):
                 cat_combo.setCurrentText(new_data['categorie'])
         
@@ -465,7 +518,7 @@ class BudgetView(QMainWindow):
         if not self.expense_rows:
             return
         last_row_widget = self.expense_rows[-1]
-        name_input_widget = last_row_widget.layout().itemAtPosition(0, 1).widget()
+        name_input_widget = last_row_widget.layout().itemAtPosition(0, 2).widget()
         if isinstance(name_input_widget, QLineEdit):
             name_input_widget.setFocus()
 
@@ -519,18 +572,108 @@ class BudgetView(QMainWindow):
             row_widget = self.expense_rows[index]
             layout = row_widget.layout()
             return {
-                "nom": layout.itemAtPosition(0, 1).widget().text(),
-                "montant_str": layout.itemAtPosition(0, 2).widget().text(),
-                "date_depense": layout.itemAtPosition(0, 3).widget().text(),
-                "categorie": layout.itemAtPosition(0, 4).widget().currentText(),
-                "effectue": layout.itemAtPosition(0, 5).widget().isChecked(),
-                "emprunte": layout.itemAtPosition(0, 6).widget().isChecked(),
-                "est_fixe": layout.itemAtPosition(0, 7).widget().isChecked(), # <-- AJOUT
+                "nom": layout.itemAtPosition(0, 2).widget().text(),
+                "montant_str": layout.itemAtPosition(0, 3).widget().text(),
+                "date_depense": layout.itemAtPosition(0, 4).widget().text(),
+                "categorie": layout.itemAtPosition(0, 5).widget().currentText(),
+                "effectue": layout.itemAtPosition(0, 6).widget().isChecked(),
+                "emprunte": layout.itemAtPosition(0, 7).widget().isChecked(),
+                "est_fixe": layout.itemAtPosition(0, 8).widget().isChecked(),
                 "est_credit": row_widget.est_credit,
             }
         return {}
 
-# Dans view.py, remplacez entièrement la méthode _create_summary_section par celle-ci :
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.MouseButtonPress:
+            parent_row = self._find_parent_row(watched)
+            if parent_row in self.expense_rows:
+                modifiers = event.modifiers() if hasattr(event, "modifiers") else QApplication.keyboardModifiers()
+                if modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+                    index = self.expense_rows.index(parent_row)
+                    self._handle_row_selection(index, modifiers)
+        return super().eventFilter(watched, event)
+
+    def _install_row_event_filters(self, row_widget: QWidget):
+        row_widget.installEventFilter(self)
+        for child in row_widget.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def _handle_row_selection(self, index: int, modifiers: Qt.KeyboardModifier):
+        if modifiers & Qt.KeyboardModifier.ShiftModifier and self.last_selected_index is not None:
+            start = min(self.last_selected_index, index)
+            end = max(self.last_selected_index, index)
+            if not (modifiers & Qt.KeyboardModifier.ControlModifier):
+                self.clear_expense_selection()
+            for i in range(start, end + 1):
+                self._select_row(i, True)
+            self.selected_row_indices = list(range(start, end + 1))
+        elif modifiers & Qt.KeyboardModifier.ControlModifier:
+            currently_selected = index in self.selected_row_indices
+            self._select_row(index, not currently_selected)
+            if currently_selected:
+                self.selected_row_indices.remove(index)
+            else:
+                self.selected_row_indices.append(index)
+        else:
+            if self.selected_row_indices != [index]:
+                self.clear_expense_selection()
+                self._select_row(index, True)
+                self.selected_row_indices = [index]
+        self.last_selected_index = index
+        self._update_selected_rows_total()
+
+    def _select_row(self, index: int, selected: bool):
+        if 0 <= index < len(self.expense_rows):
+            row_widget = self.expense_rows[index]
+            if selected:
+                row_widget.setStyleSheet(
+                    "background-color: rgba(120, 120, 140, 0.08);"
+                    "border-left: 3px solid rgba(100, 100, 120, 0.35);"
+                    "border-top-right-radius: 4px;"
+                    "border-bottom-right-radius: 4px;"
+                )
+            else:
+                row_widget.setStyleSheet("")
+
+    def clear_expense_selection(self):
+        for row_widget in self.expense_rows:
+            row_widget.setStyleSheet("")
+        self.selected_row_indices = []
+        self.last_selected_index = None
+        self._update_selected_rows_total()
+
+    def _update_selected_rows_total(self):
+        if not self.selected_rows_total_label:
+            return
+
+        total = 0.0
+        for index in self.selected_row_indices:
+            if not (0 <= index < len(self.expense_rows)):
+                continue
+
+            row_widget = self.expense_rows[index]
+            layout = row_widget.layout()
+            amount_widget = layout.itemAtPosition(0, 3).widget()
+            if not isinstance(amount_widget, QLineEdit):
+                continue
+
+            amount_text = amount_widget.text().strip()
+            if not amount_text:
+                continue
+
+            normalized = amount_text.replace(" ", "")
+            if "," in normalized and "." in normalized:
+                normalized = normalized.replace(".", "").replace(",", ".")
+            elif "," in normalized:
+                normalized = normalized.replace(",", ".")
+
+            try:
+                total += float(normalized)
+            except ValueError:
+                continue
+
+        count_text = f"({len(self.selected_row_indices)})" if self.selected_row_indices else "(0)"
+        self.selected_rows_total_label.setText(f"{count_text} {total:,.2f} €".replace(",", " "))
 
     def _create_summary_section(self) -> QGroupBox:
         group_box = QGroupBox("Récapitulatif")
@@ -539,77 +682,104 @@ class BudgetView(QMainWindow):
         # --- Conteneur pour toute la partie gauche (Tout sauf le Bitcoin) ---
         left_container = QWidget()
         left_layout = QHBoxLayout(left_container)
-        left_layout.setContentsMargins(0,0,0,0)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
         # Création des colonnes de totaux principaux
         left_form_layout = QFormLayout()
         right_form_layout = QFormLayout()
-        
+
+        # --- MODIFICATION 1 : Empêcher le FormLayout de compresser les libellés ---
+        for form in (left_form_layout, right_form_layout):
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+
         summary_items = {
-            "total_revenus": "Total des Revenus:",
-            "total_depenses": "Total des Dépenses:",
-            "argent_restant": "Argent Restant:",
-            "total_effectue": "Dépenses Réglées:",
-            "total_non_effectue": "Dépenses Prévues:",
-            "total_emprunte": "Total des Prêts:"
+            "total_revenus": "Total des Revenus",
+            "total_depenses": "Total des Dépenses",
+            "argent_restant": "Argent Restant",
+            "total_effectue": "Dépenses Réglées",
+            "total_non_effectue": "Dépenses Prévues",
+            "total_emprunte": "Total des Prêts"
         }
+        
+        def add_summary_row(form_layout: QFormLayout, key: str, text: str, default_val: str = "0.00 €"):
+            label = QLabel(text)
+            # --- MODIFICATION 2 : Garantir une taille minimale pour le texte du label ---
+            label.setMinimumWidth(130) 
+            
+            value_label = QLabel(default_val)
+            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+            value_label.setMinimumWidth(110)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            
+            self.summary_labels[key] = value_label
+            form_layout.addRow(label, value_label)
+
         items = list(summary_items.items())
         mid_point = (len(items) + 1) // 2
+        
         for key, text in items[:mid_point]:
-            label = QLabel(text)
-            value_label = QLabel("0.00 €")
-            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
-            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            value_label.setMinimumWidth(120)
-            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.summary_labels[key] = value_label
-            left_form_layout.addRow(label, value_label)
+            add_summary_row(left_form_layout, key, text)
+            
         for key, text in items[mid_point:]:
-            label = QLabel(text)
-            value_label = QLabel("0.00 €")
-            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
-            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            value_label.setMinimumWidth(120)
-            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.summary_labels[key] = value_label
-            right_form_layout.addRow(label, value_label)
+            add_summary_row(right_form_layout, key, text)
 
         left_layout.addLayout(left_form_layout)
         left_layout.addSpacing(20)
-        separator1 = QFrame(); separator1.setFrameShape(QFrame.Shape.VLine); separator1.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        separator1 = QFrame()
+        separator1.setFrameShape(QFrame.Shape.VLine)
+        separator1.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator1)
         left_layout.addSpacing(20)
+        
         left_layout.addLayout(right_form_layout)
-
         left_layout.addSpacing(20)
-        separator2 = QFrame(); separator2.setFrameShape(QFrame.Shape.VLine); separator2.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.Shape.VLine)
+        separator2.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator2)
         left_layout.addSpacing(20)
 
         extra_summary_layout = QFormLayout()
+        extra_summary_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
         extra_items = {
             "nombre_depenses": "Nombre de Lignes:",
             "total_depenses_fixes": "Total Dépenses Fixes:",
             "reste_apres_fixes": "Reste après Fixes:"
         }
         for key, text in extra_items.items():
-            label = QLabel(text)
-            value_label = QLabel("0" if key == "nombre_depenses" else "0.00 €")
-            # --- MODIFICATION : Taille de la police augmentée de 10 à 12 ---
-            value_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            value_label.setMinimumWidth(120)
-            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.summary_labels[key] = value_label
-            extra_summary_layout.addRow(label, value_label)
+            val = "0" if key == "nombre_depenses" else "0.00 €"
+            add_summary_row(extra_summary_layout, key, text, val)
         
         left_layout.addLayout(extra_summary_layout)
         left_layout.addSpacing(20)
-        separator3 = QFrame(); separator3.setFrameShape(QFrame.Shape.VLine); separator3.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        separator3 = QFrame()
+        separator3.setFrameShape(QFrame.Shape.VLine)
+        separator3.setFrameShadow(QFrame.Shadow.Sunken)
         left_layout.addWidget(separator3)
         left_layout.addSpacing(10)
 
         # Regrouper les boutons dans une colonne verticale
         buttons_layout = QVBoxLayout()
+
+        selection_row_layout = QHBoxLayout()
+        selection_label = QLabel("Total selection")
+        selection_label.setMinimumWidth(100)
+        selection_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        selection_row_layout.addWidget(selection_label)
+
+        self.selected_rows_total_label = QLabel("0.00 €")
+        self.selected_rows_total_label.setMinimumHeight(24)
+        self.selected_rows_total_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.selected_rows_total_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.selected_rows_total_label.setStyleSheet("color: #16A34A;")
+        selection_row_layout.addWidget(self.selected_rows_total_label)
+
+        buttons_layout.addLayout(selection_row_layout)
 
         self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
         self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
@@ -620,7 +790,7 @@ class BudgetView(QMainWindow):
         self.btn_import_alsace_excel.clicked.connect(self.controller.handle_import_from_alsace_excel)
         buttons_layout.addWidget(self.btn_import_alsace_excel, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # --- Forcer les 2 boutons à avoir la même largeur ---
+        # Forcer les 2 boutons à avoir la même largeur
         max_width = max(self.btn_voir_graphiques.sizeHint().width(),
                         self.btn_import_alsace_excel.sizeHint().width())
         self.btn_voir_graphiques.setMinimumWidth(max_width)
@@ -628,28 +798,37 @@ class BudgetView(QMainWindow):
 
         left_layout.addLayout(buttons_layout)
         
-        main_layout.addWidget(left_container)
-        main_layout.addStretch()
-        separator_btc = QFrame(); separator_btc.setFrameShape(QFrame.Shape.VLine); separator_btc.setFrameShadow(QFrame.Shadow.Sunken)
+        # --- MODIFICATION 3 : Donner un stretch à left_container au lieu d'un main_layout.addStretch() direct ---
+        main_layout.addWidget(left_container, 1)
+        
+        separator_btc = QFrame()
+        separator_btc.setFrameShape(QFrame.Shape.VLine)
+        separator_btc.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator_btc)
+        
         btc_container = QWidget()
         btc_layout = QVBoxLayout(btc_container)
         btc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         btc_title_label = QLabel("<b>Cours du Bitcoin</b>")
         btc_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.btc_price_label = QLabel("N/A")
         self.btc_price_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         self.btc_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.btn_refresh_btc = QPushButton("🔄")
         self.btn_refresh_btc.setToolTip("Mettre à jour le cours du Bitcoin")
         self.btn_refresh_btc.setFixedSize(65, 24)
         font = self.btn_refresh_btc.font()
         font.setPointSize(16)
         self.btn_refresh_btc.setFont(font)
+        
         btc_layout.addWidget(btc_title_label)
         btc_layout.addWidget(self.btc_price_label)
         btc_layout.addWidget(self.btn_refresh_btc, 0, Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(btc_container)
+        
+        main_layout.addWidget(btc_container, 0)
 
         group_box.setLayout(main_layout)
         return group_box
@@ -719,10 +898,10 @@ class BudgetView(QMainWindow):
                 text_to_display = ""
                 if key == "total_depenses":
                     count = summary_data.get("count_depenses", 0)
-                    text_to_display = f"{value:,.2f} €   ( {int(count)} )".replace(",", " ")
+                    text_to_display = f"( {int(count)} ) {value:,.2f} €".replace(",", " ")
                 elif key == "total_revenus":
                     count = summary_data.get("count_revenus", 0)
-                    text_to_display = f"{value:,.2f} €   ( {int(count)} )".replace(",", " ")
+                    text_to_display = f"( {int(count)} ) {value:,.2f} €".replace(",", " ")
                 elif key == "nombre_depenses":
                     text_to_display = str(int(value))
                 elif isinstance(value, (int, float)):
@@ -756,6 +935,14 @@ class BudgetView(QMainWindow):
         if 0 <= index < len(self.expense_rows):
             row_to_remove = self.expense_rows.pop(index)
             row_to_remove.deleteLater()
+            self._refresh_expense_line_numbers()
+
+    def _refresh_expense_line_numbers(self):
+        for i, row_widget in enumerate(self.expense_rows):
+            layout = row_widget.layout()
+            line_number_widget = layout.itemAtPosition(0, 0).widget()
+            if isinstance(line_number_widget, QLabel):
+                line_number_widget.setText(f"{i + 1:>3}")
 
     def clear_all_expenses(self):
         while self.expense_rows:
