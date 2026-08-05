@@ -697,7 +697,7 @@ class BudgetView(QMainWindow):
             "total_revenus": "Total des Revenus",
             "total_depenses": "Total des Dépenses",
             "argent_restant": "Argent Restant",
-            "total_effectue": "Dépenses Réglées",
+            "total_effectue": "Dépenses Payées",
             "total_non_effectue": "Dépenses Prévues",
             "total_emprunte": "Total des Prêts"
         }
@@ -874,7 +874,8 @@ class BudgetView(QMainWindow):
                 QLabel[cssClass="summaryValuePositive"] { color: #16A34A; }
                 QLabel[cssClass="summaryValueWarning"] { color: #D97706; } /* Ambre/Orange foncé */
             """
-        custom_styles += """QLabel[cssClass="shiftedHeader"] { padding-right: 25px; }"""
+        custom_styles += """QLabel[cssClass="shiftedHeader"] { padding-right: 25px; }
+                QLabel[cssClass="summaryValueBlue"] { color: #3B82F6; }"""
         final_stylesheet = qdarktheme.load_stylesheet(theme) + custom_styles
         app = QApplication.instance()
         if app:
@@ -922,7 +923,9 @@ class BudgetView(QMainWindow):
                 elif key in ['total_non_effectue', 'total_emprunte']:
                     css_class = "summaryValueWarning"  # Orange/Jaune
                     
-                elif key in ['argent_restant', 'reste_apres_fixes']:
+                elif key == 'argent_restant':
+                    css_class = "summaryValueBlue"  # Bleu
+                elif key == 'reste_apres_fixes':
                     if value >= 0:
                         css_class = "summaryValuePositive"  # Vert
                     else:
