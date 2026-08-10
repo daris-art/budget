@@ -658,8 +658,8 @@ class BudgetView(QMainWindow):
             row_widget = self.expense_rows[index]
             if selected:
                 row_widget.setStyleSheet(
-                    "background-color: rgba(120, 120, 140, 0.08);"
-                    "border-left: 3px solid rgba(100, 100, 120, 0.35);"
+                    "background-color: rgba(40, 110, 210, 0.12);"
+                    "border-left: 3px solid rgba(30, 90, 180, 0.65);"
                     "border-top-right-radius: 4px;"
                     "border-bottom-right-radius: 4px;"
                 )
