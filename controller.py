@@ -521,13 +521,15 @@ class BudgetController:
         """
         if self.view:
             search_text = self.view.search_input.text()
-            search_date = self.view.search_date_input.text()
+            search_date_min = self.view.search_date_min_input.text()
+            search_date_max = self.view.search_date_max_input.text()
             search_amount_min = self.view.search_amount_min_input.text() # NOUVEAU
             search_amount_max = self.view.search_amount_max_input.text() # NOUVEAU
             
             self.model.filter_depenses(
                 search_text=search_text, 
-                search_date=search_date, 
+                search_date_min=search_date_min,
+                search_date_max=search_date_max,
                 search_amount_min=search_amount_min, # NOUVEAU
                 search_amount_max=search_amount_max # NOUVEAU
             )

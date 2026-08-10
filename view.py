@@ -1,4 +1,5 @@
 # view.py (Version avec fermeture sur 'Échap')
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -230,17 +231,25 @@ class BudgetView(QMainWindow):
         self.search_input.textChanged.connect(self.controller.handle_search_input_changed)
         layout.addWidget(self.search_input)
 
-        layout.addWidget(QLabel("Par Date :"))
-        self.search_date_input = QLineEdit()
-        self.search_date_input.setPlaceholderText("JJ/MM/AAAA")
-        self.search_date_input.setInputMask("00/00/0000") # Masque de saisie
-        self.search_date_input.setClearButtonEnabled(True)
-        self.search_date_input.setFixedWidth(120)
-        # On connecte au MÊME gestionnaire que la recherche par nom
-        self.search_date_input.textChanged.connect(self.controller.handle_search_input_changed)
-        layout.addWidget(self.search_date_input)
+        layout.addWidget(QLabel("Date min :"))
+        self.search_date_min_input = QLineEdit()
+        self.search_date_min_input.setPlaceholderText("JJ/MM/AAAA")
+        self.search_date_min_input.setInputMask("00/00/0000")
+        self.search_date_min_input.setClearButtonEnabled(True)
+        self.search_date_min_input.setFixedWidth(120)
+        self.search_date_min_input.textChanged.connect(self.controller.handle_search_input_changed)
+        layout.addWidget(self.search_date_min_input)
 
-         # --- NOUVEAU: CHAMPS DE RECHERCHE PAR MONTANT MIN/MAX ---
+        layout.addWidget(QLabel("Date max :"))
+        self.search_date_max_input = QLineEdit()
+        self.search_date_max_input.setPlaceholderText("JJ/MM/AAAA")
+        self.search_date_max_input.setInputMask("00/00/0000")
+        self.search_date_max_input.setClearButtonEnabled(True)
+        self.search_date_max_input.setFixedWidth(120)
+        self.search_date_max_input.textChanged.connect(self.controller.handle_search_input_changed)
+        layout.addWidget(self.search_date_max_input)
+
+        # --- NOUVEAU: CHAMPS DE RECHERCHE PAR MONTANT MIN/MAX ---
         layout.addWidget(QLabel("Montant Min (€) :"))
         self.search_amount_min_input = QLineEdit()
         self.search_amount_min_input.setPlaceholderText("Min...")
@@ -325,15 +334,23 @@ class BudgetView(QMainWindow):
         self.scroll_area.setWidget(self.expenses_container)
         main_layout.addWidget(self.scroll_area)
         
-        self.btn_add_expense = QPushButton("➕ Ajouter une opération (Ctrl + A)")
+        info_layout = QHBoxLayout()
+        delete_info_label = QLabel("Supprimer une opération : Ctrl + S")
+        delete_info_label.setStyleSheet("font-size: 13px;")
+        info_layout.addWidget(delete_info_label)
+        info_layout.addStretch()
+        self.btn_add_expense = QPushButton("➕ Ajouter une opération (Ctrl + O)")
         self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
-        main_layout.addWidget(self.btn_add_expense, 0, Qt.AlignmentFlag.AlignRight)
+        info_layout.addWidget(self.btn_add_expense)
+        main_layout.addLayout(info_layout)
         
-        # --- NOUVEAU : Raccourci Ctrl+A pour ajouter une opération ---
-        self.shortcut_add_expense = QShortcut(QKeySequence("Ctrl+A"), self)
+        # --- NOUVEAU : Raccourcis clavier ---
+        self.shortcut_add_expense = QShortcut(QKeySequence("Ctrl+O"), self)
         self.shortcut_add_expense.activated.connect(self.btn_add_expense.click)
-        # Note : On simule un clic sur le bouton, ce qui appellera proprement 
-        # le handler de votre contrôleur.
+        self.shortcut_delete_expense = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_delete_expense.activated.connect(self.delete_focused_expense)
+        # Note : On simule un clic sur le bouton ou un raccourci, ce qui appellera proprement
+        # le handler du contrôleur.
 
         group_box.setLayout(main_layout)
         return group_box
@@ -501,6 +518,20 @@ class BudgetView(QMainWindow):
                 return current_widget
             current_widget = current_widget.parent()
         return None
+
+    def delete_focused_expense(self):
+        focused_widget = QApplication.focusWidget()
+        if not focused_widget:
+            return
+        current_row = self._find_parent_row(focused_widget)
+        if current_row is None:
+            return
+        current_index = self.expense_rows.index(current_row)
+        line_number_widget = current_row.layout().itemAtPosition(0, 0).widget()
+        depense_id = getattr(current_row, 'depense_id', None)
+        if depense_id is None:
+            return
+        self.controller.handle_remove_expense_by_id(depense_id)
 
     # --- MODIFICATION DE LA GESTION DES ÉVÉNEMENTS CLAVIER ---
 

@@ -20,7 +20,7 @@ class GraphDialog(QDialog):
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint)
 
         # On récupère les données fournies par le contrôleur
-        self.labels_by_name, self.values_by_name, _, self.categories_data, self.monthly_data = graph_data
+        self.labels_by_name, self.values_by_name, _, self.categories_data, self.monthly_data, self.first_word_data = graph_data
         
         # Le conteneur principal de la fenêtre
         main_layout = QVBoxLayout(self)
@@ -33,6 +33,7 @@ class GraphDialog(QDialog):
         tab_widget.addTab(self._create_pie_chart_tab(), "Dépenses par Catégorie")
         tab_widget.addTab(self._create_bar_chart_tab(), "Top 10 Dépenses (Barres)")
         tab_widget.addTab(self._create_top_expenses_pie_chart_tab(), "Top Dépenses (Camembert)")
+        tab_widget.addTab(self._create_first_word_pie_chart_tab(), "Dépenses par Premier Mot")
         tab_widget.addTab(self._create_monthly_trends_tab(), "Tendances Mensuelles")
 
         button_layout = QHBoxLayout()
@@ -140,6 +141,34 @@ class GraphDialog(QDialog):
 
             ax.set_title("Répartition des 10 plus grosses dépenses", pad=20)
         
+        fig.tight_layout()
+        return tab
+
+    def _create_first_word_pie_chart_tab(self) -> QWidget:
+        """Crée un onglet pour le camembert des dépenses regroupées par premier mot du nom."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        fig = Figure(figsize=(5, 5))
+        canvas = FigureCanvas(fig)
+        layout.addWidget(canvas)
+
+        ax = fig.add_subplot(111)
+
+        labels = list(self.first_word_data.keys())
+        values = list(self.first_word_data.values())
+
+        if values:
+            wedges, texts, autotexts = ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, textprops=dict(color='w'))
+            total = sum(values)
+            legend_labels = [f"{label} ({value/total:.1%})" for label, value in zip(labels, values)]
+            ax.legend(wedges, legend_labels,
+                      title="Premier mot",
+                      loc="center left",
+                      bbox_to_anchor=(1, 0, 0.5, 1))
+            ax.set_title("Répartition des Dépenses par Premier Mot du Nom", pad=20)
+            ax.axis('equal')
+
         fig.tight_layout()
         return tab
 

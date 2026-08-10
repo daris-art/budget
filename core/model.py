@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple, Dict
 from datetime import datetime
 import requests
 from pathlib import Path 
+import re
 # Imports depuis la nouvelle structure
 from core.data_models import *
 from core.database import DatabaseManager
@@ -24,7 +25,8 @@ class BudgetModel(Observable):
 
         self._displayed_depenses: List[Depense] = []  # AJOUT
         self._current_search_term: str = "" 
-        self._current_search_date: str = ""
+        self._current_search_date_min: Optional[datetime] = None
+        self._current_search_date_max: Optional[datetime] = None
         self._current_search_amount_min: Optional[float] = None # NOUVEAU
         self._current_search_amount_max: Optional[float] = None # NOUVEAU
         
@@ -36,10 +38,11 @@ class BudgetModel(Observable):
     
     # --- NOUVELLE MÉTHODE PUBLIQUE ---
     
-    def filter_depenses(self, search_text: str, search_date: str, search_amount_min: str, search_amount_max: str):
-        """Met à jour les critères de recherche (nom et date) et rafraîchit la liste affichée."""
+    def filter_depenses(self, search_text: str, search_date_min: str, search_date_max: str, search_amount_min: str, search_amount_max: str):
+        """Met à jour les critères de recherche (nom, dates et montants) et rafraîchit la liste affichée."""
         self._current_search_term = search_text.lower()
-        self._current_search_date = search_date
+        self._current_search_date_min = self._parse_search_date(search_date_min)
+        self._current_search_date_max = self._parse_search_date(search_date_max)
         try:
             # Convertir les montants en float pour le filtrage
             if search_amount_min:
@@ -57,6 +60,18 @@ class BudgetModel(Observable):
             self._current_search_amount_max = None
 
         self._refresh_displayed_expenses()
+
+    def _parse_search_date(self, date_text: str) -> Optional[datetime]:
+        """Convertit une date de recherche en objet datetime si elle est complète et valide."""
+        if not date_text:
+            return None
+        cleaned = date_text.strip()
+        if len(cleaned) != 10 or '_' in cleaned:
+            return None
+        try:
+            return datetime.strptime(cleaned, '%d/%m/%Y')
+        except ValueError:
+            return None
 
 
 
@@ -114,19 +129,22 @@ class BudgetModel(Observable):
                 if self._current_search_term in d.nom.lower()
             ]
 
-        # On vérifie toujours que la date entrée contient au moins un chiffre
-        if self._current_search_date and any(c.isdigit() for c in self._current_search_date):
-            
-            # 1. On nettoie le critère de recherche pour enlever les placeholders
-            #    comme '_' et les '/' à la fin.
-            search_pattern = self._current_search_date.rstrip('_/')
-            
-            # 2. On filtre en vérifiant si la date de la dépense COMMENCE par le critère nettoyé.
-            #    C'est plus précis et efficace que de chercher une sous-chaîne.
-            temp_list = [
-                d for d in temp_list
-                if d.date_depense.startswith(search_pattern)
-            ]
+        # 3. NOUVEAU: Filtre par date min/max
+        if self._current_search_date_min is not None or self._current_search_date_max is not None:
+            temp_filtered = []
+            for d in temp_list:
+                try:
+                    expense_date = datetime.strptime(d.date_depense, '%d/%m/%Y')
+                except (ValueError, TypeError):
+                    continue
+
+                if self._current_search_date_min is not None and expense_date < self._current_search_date_min:
+                    continue
+                if self._current_search_date_max is not None and expense_date > self._current_search_date_max:
+                    continue
+                temp_filtered.append(d)
+
+            temp_list = temp_filtered
 
         # 3. NOUVEAU: Filtre par montant (intervalle)
         # Si un des deux champs est rempli, on filtre
@@ -719,7 +737,7 @@ class BudgetModel(Observable):
             "total_depenses_fixes": self.get_total_depenses_fixes()
         }
     
-    def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float], List[Dict]]:
+    def get_graph_data(self) -> Tuple[List[str], List[float], float, Dict[str, float], List[Dict], Dict[str, float]]:
         """
         Prépare les données pour les graphiques en excluant les crédits (revenus)
         et en tronquant les libellés trop longs.
@@ -730,10 +748,9 @@ class BudgetModel(Observable):
         ]
         
         if not valid_expenses:
-            return [], [], 0.0, {}, []
+            return [], [], 0.0, {}, [], {}
         
         # --- MODIFICATION 1 : Tronquer les noms de dépenses pour le graphique en barres ---
-        # On utilise une expression conditionnelle pour ajouter "..." uniquement si le nom est trop long.
         labels = [
             (d.nom[:21] + '...') if len(d.nom) > 21 else d.nom 
             for d in valid_expenses
@@ -743,14 +760,20 @@ class BudgetModel(Observable):
         argent_restant = self.get_argent_restant()
         
         categories_data = {}
+        first_word_data = {}
         for d in valid_expenses:
-            # --- MODIFICATION 2 : Tronquer les noms de catégories pour le camembert ---
             categorie_label = (d.categorie[:21] + '...') if len(d.categorie) > 21 else d.categorie
             categories_data[categorie_label] = categories_data.get(categorie_label, 0) + d.montant
+
+            first_word = d.nom.strip().split()[0] if d.nom.strip().split() else "Autres"
+            first_word = re.sub(r"^[^\wÀ-ÿ]*(.*?)[^\wÀ-ÿ]*$", r"\1", first_word)
+            if not first_word:
+                first_word = "Autres"
+            first_word_data[first_word] = first_word_data.get(first_word, 0) + d.montant
         
         monthly_trends = self.get_monthly_trends_data()
 
-        return labels, values, argent_restant, categories_data, monthly_trends
+        return labels, values, argent_restant, categories_data, monthly_trends, first_word_data
     
     def get_monthly_trends_data(self) -> List[Dict]:
         """Récupère les données de revenus et de dépenses pour tous les mois."""
