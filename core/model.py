@@ -25,8 +25,8 @@ class BudgetModel(Observable):
 
         self._displayed_depenses: List[Depense] = []  # AJOUT
         self._current_search_term: str = "" 
-        self._current_search_date_min: Optional[datetime] = None
-        self._current_search_date_max: Optional[datetime] = None
+        self._current_search_date_min: Optional[dict] = None
+        self._current_search_date_max: Optional[dict] = None
         self._current_search_amount_min: Optional[float] = None # NOUVEAU
         self._current_search_amount_max: Optional[float] = None # NOUVEAU
         
@@ -61,18 +61,54 @@ class BudgetModel(Observable):
 
         self._refresh_displayed_expenses()
 
-    def _parse_search_date(self, date_text: str) -> Optional[datetime]:
-        """Convertit une date de recherche en objet datetime si elle est complète et valide."""
+    def _parse_search_date(self, date_text: str) -> Optional[dict]:
+        """Convertit une date de recherche en dictionnaire partiel ou complet.
+
+        Retourne None si aucun élément valable n'est présent.
+        - jour seulement : {'day': dd, 'month': None, 'year': None, 'is_full_date': False}
+        - jour+mois : {'day': dd, 'month': mm, 'year': None, 'is_full_date': False}
+        - date complète : {'day': dd, 'month': mm, 'year': yyyy, 'is_full_date': True}
+        """
         if not date_text:
             return None
+
         cleaned = date_text.strip()
-        if len(cleaned) != 10 or '_' in cleaned:
-            return None
-        try:
-            return datetime.strptime(cleaned, '%d/%m/%Y')
-        except ValueError:
+        if not cleaned or set(cleaned) <= {'_', '/'}:
             return None
 
+        parts = cleaned.split('/')
+        if len(parts) != 3:
+            return None
+
+        day_text, month_text, year_text = parts
+        parsed = {
+            'day': None,
+            'month': None,
+            'year': None,
+            'is_full_date': False
+        }
+
+        if day_text.isdigit():
+            day = int(day_text)
+            if 1 <= day <= 31:
+                parsed['day'] = day
+            else:
+                return None
+        else:
+            return None
+
+        if month_text.isdigit():
+            month = int(month_text)
+            if 1 <= month <= 12:
+                parsed['month'] = month
+            else:
+                return None
+
+        if year_text.isdigit() and len(year_text) == 4:
+            parsed['year'] = int(year_text)
+            parsed['is_full_date'] = True
+
+        return parsed
 
 
     # --- NOUVELLE MÉTHODE PRIVÉE ---
@@ -138,10 +174,38 @@ class BudgetModel(Observable):
                 except (ValueError, TypeError):
                     continue
 
-                if self._current_search_date_min is not None and expense_date < self._current_search_date_min:
-                    continue
-                if self._current_search_date_max is not None and expense_date > self._current_search_date_max:
-                    continue
+                if self._current_search_date_min is not None and self._current_search_date_max is None:
+                    # Date min partielle ou complète
+                    min_filter = self._current_search_date_min
+                    if min_filter['day'] is not None and expense_date.day != min_filter['day']:
+                        continue
+                    if min_filter['month'] is not None and expense_date.month != min_filter['month']:
+                        continue
+                    if min_filter['is_full_date'] and min_filter['year'] is not None and expense_date.year != min_filter['year']:
+                        continue
+                else:
+                    if self._current_search_date_min is not None:
+                        min_filter = self._current_search_date_min
+                        if min_filter['is_full_date'] and min_filter['year'] is not None:
+                            min_date = datetime(min_filter['year'], min_filter['month'], min_filter['day'])
+                        elif min_filter['month'] is not None:
+                            min_date = datetime(datetime.now().year, min_filter['month'], min_filter['day'])
+                        else:
+                            min_date = datetime(datetime.now().year, 1, min_filter['day'])
+                        if expense_date < min_date:
+                            continue
+
+                    if self._current_search_date_max is not None:
+                        max_filter = self._current_search_date_max
+                        if max_filter['is_full_date'] and max_filter['year'] is not None:
+                            max_date = datetime(max_filter['year'], max_filter['month'], max_filter['day'])
+                        elif max_filter['month'] is not None:
+                            max_date = datetime(datetime.now().year, max_filter['month'], max_filter['day'])
+                        else:
+                            max_date = datetime(datetime.now().year, 12, 31)
+                        if expense_date > max_date:
+                            continue
+
                 temp_filtered.append(d)
 
             temp_list = temp_filtered
