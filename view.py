@@ -676,8 +676,10 @@ class BudgetView(QMainWindow):
                     "background-color: rgba(40,110,210,0.06);"
                 )
             else:
+                # Utiliser un gris clair pour marquer l'édition si la ligne
+                # n'est pas sélectionnée
                 row_widget.setStyleSheet(
-                    "background-color: rgba(255,165,0,0.06);"
+                    "background-color: rgba(128,128,128,0.08);"
                 )
         else:
             # Retablir l'apparence précédente (sélection ou normal)
