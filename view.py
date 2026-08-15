@@ -469,6 +469,8 @@ class BudgetView(QMainWindow):
         
         # MODIFICATION: Seul le montant déclenche une mise à jour live pendant la frappe
         montant_input.textChanged.connect(self.controller.handle_live_update)
+        # Mettre à jour le total des lignes sélectionnées en temps réel
+        montant_input.textChanged.connect(lambda _: self._update_selected_rows_total())
         
         btn_supprimer_depense.clicked.connect(lambda checked=False, d_id=depense.id: self.controller.handle_remove_expense_by_id(d_id))
 
@@ -615,6 +617,7 @@ class BudgetView(QMainWindow):
         return {}
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # Gestion du clic pour la sélection multiple
         if event.type() == QEvent.Type.MouseButtonPress:
             parent_row = self._find_parent_row(watched)
             if parent_row in self.expense_rows:
@@ -622,7 +625,66 @@ class BudgetView(QMainWindow):
                 if modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
                     index = self.expense_rows.index(parent_row)
                     self._handle_row_selection(index, modifiers)
+                    # Si on Ctrl+clic sur un champ d'entrée, marquer la ligne comme éditée immédiatement
+                    try:
+                        from PyQt6.QtWidgets import QLineEdit, QComboBox
+                        if isinstance(watched, (QLineEdit, QComboBox)):
+                            self._mark_row_editing(index, True)
+                    except Exception:
+                        pass
+
+        # Marquage visuel lorsque l'un des champs de la ligne reçoit le focus
+        if event.type() == QEvent.Type.FocusIn:
+            parent_row = self._find_parent_row(watched)
+            if parent_row in self.expense_rows:
+                try:
+                    index = self.expense_rows.index(parent_row)
+                    self._mark_row_editing(index, True)
+                except ValueError:
+                    pass
+
+        # Retirer le marquage quand le focus quitte la ligne (sauf si le focus reste dans la même ligne)
+        if event.type() == QEvent.Type.FocusOut:
+            parent_row = self._find_parent_row(watched)
+            if parent_row in self.expense_rows:
+                current_focused = QApplication.focusWidget()
+                focused_row = self._find_parent_row(current_focused) if current_focused else None
+                # Si le focus reste dans la même ligne, ne rien faire
+                if focused_row == parent_row:
+                    return super().eventFilter(watched, event)
+                try:
+                    index = self.expense_rows.index(parent_row)
+                    self._mark_row_editing(index, False)
+                except ValueError:
+                    pass
+
         return super().eventFilter(watched, event)
+
+    def _mark_row_editing(self, index: int, editing: bool):
+        """Applique ou retire un style de marquage visuel pour la ligne en cours d'édition."""
+        if not (0 <= index < len(self.expense_rows)):
+            return
+
+        row_widget = self.expense_rows[index]
+
+        if editing:
+            # Style d'édition (fond orange léger)
+            # Ne pas appliquer le marquage d'édition si la ligne est sélectionnée
+            if index in self.selected_row_indices:
+                # Pour une ligne à la fois sélectionnée et éditée : fond bleu clair
+                row_widget.setStyleSheet(
+                    "background-color: rgba(40,110,210,0.06);"
+                )
+            else:
+                row_widget.setStyleSheet(
+                    "background-color: rgba(255,165,0,0.06);"
+                )
+        else:
+            # Retablir l'apparence précédente (sélection ou normal)
+            if index in self.selected_row_indices:
+                self._select_row(index, True)
+            else:
+                row_widget.setStyleSheet("")
 
     def _install_row_event_filters(self, row_widget: QWidget):
         row_widget.installEventFilter(self)
@@ -659,9 +721,6 @@ class BudgetView(QMainWindow):
             if selected:
                 row_widget.setStyleSheet(
                     "background-color: rgba(40, 110, 210, 0.12);"
-                    "border-left: 3px solid rgba(30, 90, 180, 0.65);"
-                    "border-top-right-radius: 4px;"
-                    "border-bottom-right-radius: 4px;"
                 )
             else:
                 row_widget.setStyleSheet("")
