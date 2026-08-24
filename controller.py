@@ -275,6 +275,28 @@ class BudgetController:
         result = self.model.export_to_json(filepath)
         self._handle_result(result)
 
+    def handle_generate_month_report_pdf(self):
+        """Génère un rapport PDF complet du mois courant."""
+        if not self.model.mois_actuel:
+            self.view.show_warning_message("Veuillez d'abord créer ou charger un mois.")
+            return
+
+        filepath = self.view.get_pdf_report_filepath()
+        if not filepath:
+            return
+
+        self.view.set_month_actions_enabled(False)
+        self.view.show_progress_bar(indeterminate=True)
+        self.view.update_status_bar("Génération du rapport PDF en cours...", duration=0)
+        QApplication.processEvents()
+
+        try:
+            result = self.model.export_month_report_pdf(filepath)
+            self._handle_result(result)
+        finally:
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+
     def handle_import_from_json(self):
         """Gère l'import depuis JSON en créant un nouveau mois."""
         filepath = self.view.get_import_filepath()

@@ -859,6 +859,16 @@ class BudgetModel(Observable):
             
         return self._import_export_service.export_to_json(self.mois_actuel.id, filepath)
 
+    def export_month_report_pdf(self, filepath: Path) -> Result:
+        """Génère un rapport PDF complet du mois courant."""
+        if not self.mois_actuel:
+            return Result.error("Aucun mois n'est chargé pour le rapport PDF.")
+
+        if filepath.suffix.lower() != '.pdf':
+            filepath = filepath.with_suffix('.pdf')
+
+        return self._import_export_service.export_month_report_pdf(self.mois_actuel.id, filepath)
+
     def import_from_json(self, filepath: Path, new_mois_name: str) -> Result:
         """Orchestre l'import d'un fichier JSON comme un nouveau mois."""
         if not new_mois_name or not new_mois_name.strip():

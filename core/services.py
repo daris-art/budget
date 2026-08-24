@@ -41,6 +41,124 @@ class ImportExportService:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
+    def export_month_report_pdf(self, mois_id: int, filepath: Path) -> Result:
+        """Crée un rapport PDF complet du mois avec résumé et liste des opérations."""
+        try:
+            mois = self.db_manager.get_mois_by_id(mois_id)
+            if not mois:
+                return Result.error("Mois non trouvé pour le rapport PDF.")
+
+            depenses = self.db_manager.get_depenses_by_mois(mois_id)
+            try:
+                from reportlab.lib import colors
+                from reportlab.lib.pagesizes import A4
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib.units import mm
+                from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+            except ImportError:
+                return Result.error("La dépendance 'reportlab' est requise pour générer un PDF. Installez-la avec : pip install reportlab")
+
+            total_revenus = sum(d.montant for d in depenses if d.est_credit)
+            total_depenses = sum(d.montant for d in depenses if not d.est_credit)
+            total_effectue = sum(d.montant for d in depenses if d.effectue and not d.est_credit)
+            total_non_effectue = total_depenses - total_effectue
+            total_emprunte = sum(d.montant for d in depenses if d.emprunte)
+            total_depenses_fixes = sum(d.montant for d in depenses if not d.est_credit and d.est_fixe)
+            argent_restant = total_revenus - total_depenses
+
+            doc = SimpleDocTemplate(str(filepath), pagesize=A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=12*mm, bottomMargin=12*mm)
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=18, leading=22, spaceAfter=10, textColor=colors.HexColor('#1f2937'))
+            section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, leading=14, spaceAfter=6, textColor=colors.HexColor('#111827'))
+            normal_style = ParagraphStyle('NormalBold', parent=styles['BodyText'], fontSize=9, leading=11)
+            cell_style = ParagraphStyle(
+                'CellBody',
+                parent=styles['BodyText'],
+                fontSize=7,
+                leading=9,
+                wordWrap='CJK',
+                borderPadding=2,
+                alignment=1
+            )
+
+            story = []
+            story.append(Paragraph(f"Rapport du mois : {mois.nom}", title_style))
+            story.append(Paragraph(f"Date de génération : {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", normal_style))
+            story.append(Spacer(1, 8))
+
+            summary_data = [
+                ["Total revenus", f"{total_revenus:.2f} €"],
+                ["Total dépenses", f"{total_depenses:.2f} €"],
+                ["Dépenses effectuées", f"{total_effectue:.2f} €"],
+                ["Dépenses non effectuées", f"{total_non_effectue:.2f} €"],
+                ["Dépenses fixes", f"{total_depenses_fixes:.2f} €"],
+                ["Montant emprunté", f"{total_emprunte:.2f} €"],
+                ["Argent restant", f"{argent_restant:.2f} €"],
+            ]
+            summary_table = Table(summary_data, colWidths=[90*mm, 55*mm])
+            summary_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e5e7eb')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#111827')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9fafb')]),
+            ]))
+            story.append(Paragraph("Résumé", section_style))
+            story.append(summary_table)
+            story.append(Spacer(1, 12))
+
+            story.append(Paragraph("Détails des opérations", section_style))
+            if depenses:
+                rows = [["Date", "Nom", "Catégorie", "Montant", "Type", "Payé", "Fixe"]]
+                for d in sorted(depenses, key=lambda x: x.date_depense if x.date_depense else '', reverse=True):
+                    montant_style = ParagraphStyle(
+                        'AmountCell',
+                        parent=cell_style,
+                        textColor=colors.HexColor('#16a34a') if d.est_credit else colors.HexColor('#111827'),
+                        fontName='Helvetica-Bold' if d.est_credit else 'Helvetica',
+                        fontSize=7,
+                        leading=9,
+                        alignment=2,
+                    )
+                    rows.append([
+                        Paragraph(d.date_depense, cell_style),
+                        Paragraph(d.nom, cell_style),
+                        Paragraph(d.categorie, cell_style),
+                        Paragraph(f"{d.montant:.2f} €", montant_style),
+                        Paragraph('Revenu' if d.est_credit else 'Dépense', cell_style),
+                        Paragraph('Oui' if d.effectue else 'Non', cell_style),
+                        Paragraph('Oui' if d.est_fixe else 'Non', cell_style),
+                    ])
+                detail_table = Table(
+                    rows,
+                    colWidths=[18*mm, 48*mm, 30*mm, 18*mm, 18*mm, 14*mm, 12*mm],
+                    repeatRows=1
+                )
+                detail_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dbeafe')),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ]))
+                story.append(detail_table)
+            else:
+                story.append(Paragraph("Aucune opération enregistrée pour ce mois.", normal_style))
+
+            doc.build(story)
+            return Result.success(f"Rapport PDF généré : {filepath.name}")
+
+        except Exception as e:
+            logger.error(f"Erreur inattendue lors de la génération du rapport PDF: {e}")
+            return Result.error(f"Une erreur inattendue est survenue lors de la génération du PDF: {e}")
+
     def export_to_json(self, mois_id: int, filepath: Path) -> Result:
         """Exporte les données d'un mois (salaire et dépenses) vers un fichier JSON."""
         try:

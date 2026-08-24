@@ -338,6 +338,12 @@ class BudgetView(QMainWindow):
         delete_info_label = QLabel("Supprimer une opération : Ctrl + S")
         delete_info_label.setStyleSheet("font-size: 13px;")
         info_layout.addWidget(delete_info_label)
+
+        self.btn_generate_pdf_report = QPushButton("📄 Rapport PDF")
+        self.btn_generate_pdf_report.setToolTip("Créer un rapport PDF complet du mois courant")
+        self.btn_generate_pdf_report.clicked.connect(self.controller.handle_generate_month_report_pdf)
+        info_layout.addWidget(self.btn_generate_pdf_report)
+
         info_layout.addStretch()
         self.btn_add_expense = QPushButton("➕ Ajouter une opération (Ctrl + O)")
         self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
@@ -679,7 +685,7 @@ class BudgetView(QMainWindow):
                 # Utiliser un gris clair pour marquer l'édition si la ligne
                 # n'est pas sélectionnée
                 row_widget.setStyleSheet(
-                    "background-color: rgba(128,128,128,0.08);"
+                    "background-color: rgba(128,128,128,0.03);"
                 )
         else:
             # Retablir l'apparence précédente (sélection ou normal)
@@ -1104,6 +1110,16 @@ class BudgetView(QMainWindow):
 
     def get_export_filepath(self) -> Optional[Path]:
         filepath, _ = QFileDialog.getSaveFileName(self, "Exporter vers JSON", "", "Fichiers JSON (*.json);;Tous les fichiers (*.*)")
+        return Path(filepath) if filepath else None
+
+    def get_pdf_report_filepath(self) -> Optional[Path]:
+        default_name = f"rapport_{self.controller.model.mois_actuel.nom if self.controller.model.mois_actuel else 'mois'}.pdf"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Enregistrer le rapport PDF",
+            default_name,
+            "Fichiers PDF (*.pdf);;Tous les fichiers (*.*)"
+        )
         return Path(filepath) if filepath else None
     
     
