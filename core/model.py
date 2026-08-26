@@ -235,6 +235,10 @@ class BudgetModel(Observable):
                 temp_list.sort(key=lambda d: d.nom.lower())
             elif sort_key == "nom_desc":
                 temp_list.sort(key=lambda d: d.nom.lower(), reverse=True)
+            elif sort_key == "categorie_asc":
+                temp_list.sort(key=lambda d: d.categorie.lower())
+            elif sort_key == "categorie_desc":
+                temp_list.sort(key=lambda d: d.categorie.lower(), reverse=True)
             elif sort_key == "effectue_desc":
                 temp_list.sort(key=lambda d: d.effectue, reverse=True)
             elif sort_key == "effectue_asc":

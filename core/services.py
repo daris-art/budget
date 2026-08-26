@@ -14,6 +14,78 @@ from core.data_models import Result, Depense, DatabaseError
 
 logger = logging.getLogger(__name__)
 
+
+class ImportCategoryClassifier:
+    """Déduit une catégorie à partir du libellé d'une dépense."""
+
+    KEYWORDS_BY_CATEGORY = {
+        "Alimentation": [
+            "carrefour", "auchan", "leclerc", "casino", "supermarche", "epicerie",
+            "boulangerie", "magasin", "superette", "fruit", "legume", "lidl", 
+            "bingo", "brkic", "konzum"
+        ],
+        "Logement": [
+            "loyer", "copropriete", "assurance habitation", "eau", "gaz", "electricite",
+            "energie", "chauffage", "immobilier", "apartement", "remboursement",
+            "charges courantes", "pret habitat", "electricite", "assurence habitation"
+        ],
+        "Transport": [
+            "sncf", "uber", "taxi", "essence", "station", "parking", "train", "bus",
+            "carburant", "autoroute", "mobilite"
+        ],
+        "Factures": [
+            "orange", "free", "edf", "engie", "internet", "telephone", "mobile", "facture",
+            "abonnement", "box", "sfr", "canal+", "impot", "novotel", "google"
+        ],
+        "Shopping": [
+            "amazon", "ikea", "zalando", "decathlon", "boutique", "vetement", "vêtement",
+            "chaussure", "mode", "commerce"
+        ],
+        "Santé": [
+            "pharmacie", "docteur", "clinique", "medecin", "dentiste", "optique", "sante",
+            "hopital"
+        ],
+        "Loisirs": [
+            "netflix", "spotify", "cinema", "restaurant", "bar", "festival", "loisir",
+            "sortie", "theatre", "theater", "cafe"
+        ],
+        "Autres": []
+    }
+
+    @staticmethod
+    def normalize_label(label: str) -> str:
+        if not label:
+            return ""
+        normalized = str(label).lower()
+        for accented, plain in {"é": "e", "è": "e", "à": "a", "ç": "c", "ù": "u"}.items():
+            normalized = normalized.replace(accented, plain)
+        normalized = ''.join(ch if ch.isalnum() or ch.isspace() else ' ' for ch in normalized)
+        return ' '.join(normalized.split())
+
+    @classmethod
+    def infer_expense_category(cls, label: str) -> str:
+        normalized = cls.normalize_label(label)
+        if not normalized:
+            return "Autres"
+
+        best_category = "Autres"
+        best_score = 0
+
+        for category, keywords in cls.KEYWORDS_BY_CATEGORY.items():
+            if not keywords:
+                continue
+            score = 0
+            for keyword in keywords:
+                normalized_keyword = cls.normalize_label(keyword)
+                if normalized_keyword in normalized:
+                    score += 2
+            if score > best_score:
+                best_score = score
+                best_category = category
+
+        return best_category
+
+
 class BitcoinAPIService:
     """Service pour récupérer le prix du Bitcoin."""
     def get_price(self) -> Result:
@@ -263,9 +335,9 @@ class ImportExportService:
                 return Result.error("Aucune donnée trouvée après l'en-tête.")
 
             operations_a_importer: List[Depense] = []
-            
+
             # On parcourt les lignes pré-chargées
-            for row in rows_to_process: 
+            for row_index, row in enumerate(rows_to_process):
 
                 cells = [cell.value for cell in row]
                 nom = cells[col_indices["nom"]]
@@ -286,26 +358,34 @@ class ImportExportService:
                 try:
                     if "credit" in col_indices and credit_val and float(credit_val) > 0:
                         montant, est_credit = float(credit_val), True
-                        categorie = "Revenue" # Définir la catégorie comme "Revenue" pour les crédits
+                        categorie = "Revenue"
                     elif "debit" in col_indices and debit_val and float(debit_val) > 0:
                         montant, est_credit = float(debit_val), False
-                        categorie = "Autres" # Ou toute autre catégorie par défaut pour les débits
+                        categorie = ImportCategoryClassifier.infer_expense_category(str(nom))
                     else:
                         continue
                 except (ValueError, TypeError):
-                    logger.warning(f"Ligne {i + header_row_index + 1} ignorée: montant invalide.")
+                    logger.warning(f"Ligne {row_index + header_row_index + 2} ignorée: montant invalide.")
                     continue
-                
+
                 operations_a_importer.append(
-                    Depense(nom=str(nom).strip(), montant=montant, categorie=categorie, date_depense=date_depense_str, est_credit=est_credit, effectue= True)
+                    Depense(
+                        nom=str(nom).strip(),
+                        montant=montant,
+                        categorie=categorie,
+                        date_depense=date_depense_str,
+                        est_credit=est_credit,
+                        effectue=True,
+                        emprunte=False,
+                        est_fixe=False
+                    )
                 )
-            
+
             # 1. On calcule le total des crédits qui servira de salaire initial
             salaire_initial = sum(op.montant for op in operations_a_importer if op.est_credit)
 
             # 2. On appelle notre méthode transactionnelle unique
             self.db_manager.import_new_mois(new_mois_name, salaire_initial, operations_a_importer)
-
 
             return Result.success(f"{len(operations_a_importer)} opérations importées dans '{new_mois_name}'.")
 

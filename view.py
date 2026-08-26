@@ -279,6 +279,7 @@ class BudgetView(QMainWindow):
             "Montant (plus bas d'abord)": "montant_asc",
             "Nom (A-Z)": "nom_asc",
             "Nom (Z-A)": "nom_desc",
+            "Catégorie (A-Z)": "categorie_asc",
             "Payé d'abord": "effectue_desc",
             "Non payé d'abord": "effectue_asc",
             "Dépenses fixes d'abord": "est_fixe_desc",
