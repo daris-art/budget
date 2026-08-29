@@ -135,42 +135,74 @@ class BudgetView(QMainWindow):
 
         btn_nouveau = QPushButton("➕ Nouveau")
         btn_nouveau.clicked.connect(self.controller.handle_create_mois)
+        btn_nouveau.setToolTip("Créer un nouveau mois (Ctrl+N)")
         layout.addWidget(btn_nouveau)
         
         btn_renommer = QPushButton("✏️ Renommer")
         btn_renommer.clicked.connect(self.controller.handle_rename_mois)
+        btn_renommer.setToolTip("Renommer le mois (Ctrl+R)")
         layout.addWidget(btn_renommer)
         
         btn_dupliquer = QPushButton("📋 Dupliquer")
         btn_dupliquer.setToolTip("Dupliquer le mois actuel avec toutes ses opérations")
         btn_dupliquer.clicked.connect(self.controller.handle_duplicate_mois)
+        btn_dupliquer.setToolTip(btn_dupliquer.toolTip() + " (Ctrl+D)")
         layout.addWidget(btn_dupliquer)
 
         btn_import_json = QPushButton("📥 Importer JSON")
         btn_import_json.clicked.connect(self.controller.handle_import_from_json)
+        btn_import_json.setToolTip("Importer un fichier JSON (Ctrl+Shift+J)")
         layout.addWidget(btn_import_json)
 
         btn_export_json = QPushButton("📤 Exporter JSON")
         btn_export_json.clicked.connect(self.controller.handle_export_to_json)
+        btn_export_json.setToolTip("Exporter vers JSON (Ctrl+Shift+E)")
         layout.addWidget(btn_export_json)
 
         btn_importer_excel = QPushButton("📥 Importer Excel")
         btn_importer_excel.setObjectName("GreenButton")
         btn_importer_excel.clicked.connect(self.controller.handle_import_from_excel)
+        btn_importer_excel.setToolTip("Importer depuis Excel (Ctrl+I)")
         layout.addWidget(btn_importer_excel)
         
         btn_supprimer = QPushButton("🗑️ Supprimer")
         btn_supprimer.setObjectName("RedButton")
         btn_supprimer.clicked.connect(self.controller.handle_delete_mois)
+        btn_supprimer.setToolTip("Supprimer le mois courant (Ctrl+Shift+Del)")
         layout.addWidget(btn_supprimer)
         
         layout.addStretch()
 
         self.btn_toggle_theme = QPushButton("🌙")
-        self.btn_toggle_theme.setToolTip("Changer le thème (Clair/Sombre)")
+        self.btn_toggle_theme.setToolTip("Changer le thème (Clair/Sombre) (Ctrl+T)")
         self.btn_toggle_theme.setFixedSize(32, 32)
         self.btn_toggle_theme.clicked.connect(self.controller.handle_toggle_theme)
         layout.addWidget(self.btn_toggle_theme)
+
+        # --- Raccourcis clavier pour les actions du cadre Gestion du Mois ---
+        self.shortcut_new_month = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.shortcut_new_month.activated.connect(btn_nouveau.click)
+
+        self.shortcut_rename_month = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.shortcut_rename_month.activated.connect(btn_renommer.click)
+
+        self.shortcut_duplicate_month = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.shortcut_duplicate_month.activated.connect(btn_dupliquer.click)
+
+        self.shortcut_import_json = QShortcut(QKeySequence("Ctrl+Shift+J"), self)
+        self.shortcut_import_json.activated.connect(btn_import_json.click)
+
+        self.shortcut_export_json = QShortcut(QKeySequence("Ctrl+Shift+E"), self)
+        self.shortcut_export_json.activated.connect(btn_export_json.click)
+
+        self.shortcut_import_excel = QShortcut(QKeySequence("Ctrl+I"), self)
+        self.shortcut_import_excel.activated.connect(btn_importer_excel.click)
+
+        self.shortcut_delete_month = QShortcut(QKeySequence("Ctrl+Shift+Del"), self)
+        self.shortcut_delete_month.activated.connect(btn_supprimer.click)
+
+        self.shortcut_toggle_theme_short = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.shortcut_toggle_theme_short.activated.connect(self.btn_toggle_theme.click)
 
         group_box.setLayout(layout)
         return group_box
@@ -336,19 +368,35 @@ class BudgetView(QMainWindow):
         main_layout.addWidget(self.scroll_area)
         
         info_layout = QHBoxLayout()
-        delete_info_label = QLabel("Supprimer une opération : Ctrl + S")
-        delete_info_label.setStyleSheet("font-size: 13px;")
-        info_layout.addWidget(delete_info_label)
+        # (Label for delete info removed from UI per user request)
 
         self.btn_generate_pdf_report = QPushButton("📄 Rapport PDF")
         self.btn_generate_pdf_report.setToolTip("Créer un rapport PDF complet du mois courant")
         self.btn_generate_pdf_report.clicked.connect(self.controller.handle_generate_month_report_pdf)
         info_layout.addWidget(self.btn_generate_pdf_report)
 
+        # Nouveau: rapport PDF trié par montant
+        self.btn_generate_pdf_report_by_amount = QPushButton("📄 Rapport PDF (Montant)")
+        self.btn_generate_pdf_report_by_amount.setToolTip("Créer un rapport PDF trié par montant (décroissant)")
+        self.btn_generate_pdf_report_by_amount.clicked.connect(self.controller.handle_generate_month_report_pdf_sorted_by_amount)
+        info_layout.addWidget(self.btn_generate_pdf_report_by_amount)
+
         info_layout.addStretch()
+
+        # Bouton pour supprimer toutes les lignes sélectionnées
+        self.btn_delete_selected = QPushButton("🗑️ Supprimer sélection")
+        self.btn_delete_selected.setToolTip("Supprimer toutes les lignes sélectionnées (Ctrl+Suppr)")
+        self.btn_delete_selected.clicked.connect(self._delete_selected_expenses)
+        info_layout.addWidget(self.btn_delete_selected)
+
         self.btn_add_expense = QPushButton("➕ Ajouter une opération (Ctrl + O)")
+        self.btn_add_expense.setToolTip("Ajouter une opération (Ctrl+O)")
         self.btn_add_expense.clicked.connect(self.controller.handle_add_expense)
         info_layout.addWidget(self.btn_add_expense)
+
+        # Raccourci clavier pour supprimer la sélection (Ctrl+Suppr)
+        self.shortcut_delete_selected = QShortcut(QKeySequence("Ctrl+Delete"), self)
+        self.shortcut_delete_selected.activated.connect(self._delete_selected_expenses)
         main_layout.addLayout(info_layout)
         
         # --- NOUVEAU : Raccourcis clavier ---
@@ -431,6 +479,7 @@ class BudgetView(QMainWindow):
         fixe_check.setStyleSheet(checkbox_style) # <-- AJOUT
         btn_supprimer_depense = QPushButton("➖")
         btn_supprimer_depense.setObjectName("RedButton")
+        btn_supprimer_depense.setToolTip("Supprimer cette opération (Ctrl+S)")
 
         line_number_label = QLabel(f"{index + 1:>3}")
         line_number_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -462,11 +511,12 @@ class BudgetView(QMainWindow):
         row_layout.setColumnStretch(9, 1)
 
         # CONNEXIONS OPTIMISÉES:
-        # Sauvegarde uniquement à la fin de l'édition
+        # Sauvegarde uniquement à la fin de l'édition / lorsqu'un choix est validé.
         nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
         date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        cat_combo.currentIndexChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        # Ne pas sauvegarder à chaque changement de sélection pendant le scroll de la liste.
+        cat_combo.activated.connect(lambda _, i=index: self.controller.handle_update_expense(i))
         
         # MODIFICATION: Les checkboxes ne déclenchent QUE la sauvegarde
         # La mise à jour live sera gérée par handle_update_expense
@@ -541,6 +591,39 @@ class BudgetView(QMainWindow):
         if depense_id is None:
             return
         self.controller.handle_remove_expense_by_id(depense_id)
+
+    def _delete_selected_expenses(self):
+        """Supprime toutes les opérations actuellement sélectionnées."""
+        if not self.selected_row_indices:
+            QMessageBox.information(self, "Aucune sélection", "Aucune ligne sélectionnée à supprimer.")
+            return
+
+        # Récupère les ids des dépenses sélectionnées
+        ids = []
+        for idx in self.selected_row_indices:
+            if 0 <= idx < len(self.expense_rows):
+                row = self.expense_rows[idx]
+                dep_id = getattr(row, 'depense_id', None)
+                if dep_id is not None:
+                    ids.append(dep_id)
+
+        if not ids:
+            QMessageBox.information(self, "Aucune sélection", "Aucune ligne sélectionnée à supprimer.")
+            return
+
+        # Déclenche la suppression groupée via le contrôleur (qui demande
+        # une seule confirmation)
+        try:
+            self.controller.handle_remove_expenses_by_ids(ids)
+        except Exception:
+            logger.exception("Erreur lors de la suppression groupée des opérations")
+
+        # Nettoie la sélection locale
+        self.clear_expense_selection()
+        # Affiche un message de succès pendant 3 secondes
+        count = len(ids)
+        msg = f"{count} ligne supprimée" if count == 1 else f"{count} lignes supprimées"
+        self.update_status_bar(msg, duration=3000)
 
     # --- MODIFICATION DE LA GESTION DES ÉVÉNEMENTS CLAVIER ---
 
@@ -624,6 +707,11 @@ class BudgetView(QMainWindow):
         return {}
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # Les combobox de catégorie ne doivent pas déclencher la sélection de ligne,
+        # même lorsqu'on scroll dans leur liste ou qu'elles reçoivent le focus.
+        if isinstance(watched, QComboBox):
+            return super().eventFilter(watched, event)
+
         # Gestion du clic pour la sélection multiple
         if event.type() == QEvent.Type.MouseButtonPress:
             parent_row = self._find_parent_row(watched)
@@ -634,8 +722,8 @@ class BudgetView(QMainWindow):
                     self._handle_row_selection(index, modifiers)
                     # Si on Ctrl+clic sur un champ d'entrée, marquer la ligne comme éditée immédiatement
                     try:
-                        from PyQt6.QtWidgets import QLineEdit, QComboBox
-                        if isinstance(watched, (QLineEdit, QComboBox)):
+                        from PyQt6.QtWidgets import QLineEdit
+                        if isinstance(watched, QLineEdit):
                             self._mark_row_editing(index, True)
                     except Exception:
                         pass
@@ -881,9 +969,13 @@ class BudgetView(QMainWindow):
         buttons_layout.addLayout(selection_row_layout)
 
         self.btn_voir_graphiques = QPushButton("📊 Voir Graphiques")
-        self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel")
+        self.btn_voir_graphiques.setToolTip("Afficher les graphiques financiers pour le mois actuel (Ctrl+G)")
         self.btn_voir_graphiques.clicked.connect(self.controller.handle_show_graphs)
         buttons_layout.addWidget(self.btn_voir_graphiques, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Raccourci clavier pour afficher les graphiques (Ctrl+G)
+        self.shortcut_show_graphs = QShortcut(QKeySequence("Ctrl+G"), self)
+        self.shortcut_show_graphs.activated.connect(self.btn_voir_graphiques.click)
 
         self.btn_import_alsace_excel = QPushButton("📥 Importer Excel (Alsace)")
         self.btn_import_alsace_excel.clicked.connect(self.controller.handle_import_from_alsace_excel)

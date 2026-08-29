@@ -244,7 +244,22 @@ class BudgetController:
         """Gère la suppression d'une dépense via son ID."""
         if self.view.ask_confirmation("Confirmation", "Supprimer cette dépense ?"):
             result = self.model.remove_expense_by_id(depense_id)
-            self._handle_result(result, show_success=False)
+            self._handle_result(result)
+
+    def handle_remove_expenses_by_ids(self, depense_ids: list):
+        """Gère la suppression de plusieurs dépenses par leurs IDs, avec une seule confirmation."""
+        if not depense_ids:
+            return
+
+        if not self.view.ask_confirmation("Confirmation", f"Supprimer {len(depense_ids)} dépense(s) sélectionnée(s) ?"):
+            return
+
+        for dep_id in depense_ids:
+            try:
+                result = self.model.remove_expense_by_id(dep_id)
+                self._handle_result(result, show_success=False)
+            except Exception as e:
+                logger.exception(f"Erreur lors de la suppression de l'opération {dep_id}: {e}")
 
     def handle_sort_expenses(self):
         """Gère le tri des dépenses en fonction de l'option choisie dans la vue."""
@@ -292,6 +307,28 @@ class BudgetController:
 
         try:
             result = self.model.export_month_report_pdf(filepath)
+            self._handle_result(result)
+        finally:
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+
+    def handle_generate_month_report_pdf_sorted_by_amount(self):
+        """Génère un rapport PDF trié par montant décroissant."""
+        if not self.model.mois_actuel:
+            self.view.show_warning_message("Veuillez d'abord créer ou charger un mois.")
+            return
+
+        filepath = self.view.get_pdf_report_filepath()
+        if not filepath:
+            return
+
+        self.view.set_month_actions_enabled(False)
+        self.view.show_progress_bar(indeterminate=True)
+        self.view.update_status_bar("Génération du rapport PDF (trié par montant) en cours...", duration=0)
+        QApplication.processEvents()
+
+        try:
+            result = self.model.export_month_report_pdf_sorted_by_amount(filepath)
             self._handle_result(result)
         finally:
             self.view.hide_progress_bar()

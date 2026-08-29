@@ -343,7 +343,7 @@ class BudgetModel(Observable):
                 # On notifie avec l'index de la liste AFFICHÉE
                 self.notify_observers('expense_removed', {'index': index_displayed})
             
-            return Result.success()
+            return Result.success("Dépense supprimée")
         except DatabaseError as e:
             return Result.error(str(e))
 
@@ -872,6 +872,16 @@ class BudgetModel(Observable):
             filepath = filepath.with_suffix('.pdf')
 
         return self._import_export_service.export_month_report_pdf(self.mois_actuel.id, filepath)
+
+    def export_month_report_pdf_sorted_by_amount(self, filepath: Path) -> Result:
+        """Génère un rapport PDF complet du mois courant trié par montant décroissant."""
+        if not self.mois_actuel:
+            return Result.error("Aucun mois n'est chargé pour le rapport PDF.")
+
+        if filepath.suffix.lower() != '.pdf':
+            filepath = filepath.with_suffix('.pdf')
+
+        return self._import_export_service.export_month_report_pdf_sorted_by_amount(self.mois_actuel.id, filepath)
 
     def import_from_json(self, filepath: Path, new_mois_name: str) -> Result:
         """Orchestre l'import d'un fichier JSON comme un nouveau mois."""
