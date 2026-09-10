@@ -147,7 +147,18 @@ class BudgetController:
         try:
             mois_data = self.view.get_new_mois_input()
             if mois_data:
-                result = self.model.create_mois(mois_data['nom'])
+                # Proposer le choix à l'utilisateur : créer avec ou sans opérations fixes
+                prompt = (
+                    "Voulez-vous préremplir ce nouveau mois avec les opérations marquées comme 'Fixe' \n"
+                    "depuis le mois actuellement chargé (ou depuis le dernier mois existant) ?"
+                )
+                use_fixed = self.view.ask_confirmation("Créer avec opérations fixes", prompt)
+
+                if use_fixed:
+                    result = self.model.create_mois_with_fixed_operations(mois_data['nom'])
+                else:
+                    result = self.model.create_mois(mois_data['nom'])
+
                 self._handle_result(result)
         except Exception as e:
             logger.error(f"Erreur lors de la création du mois: {e}")

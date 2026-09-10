@@ -407,6 +407,89 @@ class BudgetModel(Observable):
         except Exception as e:
             logger.critical(f"Erreur inattendue lors création mois: {e}")
             return Result.error("Une erreur inattendue s'est produite")
+
+    def create_mois_with_fixed_operations(self, nom: str) -> Result:
+        """Crée un nouveau mois et y préremplit les opérations marquées comme 'est_fixe'.
+
+        Comportement :
+        - Si un mois est chargé en mémoire et contient des opérations marquées `est_fixe`,
+          ce sont elles qui seront copiées dans le nouveau mois.
+        - Sinon, on prend le mois le plus récent en base (s'il existe) et on copie ses
+          opérations marquées `est_fixe`.
+        - On copie également le salaire du mois source lorsque possible.
+        """
+        try:
+            # Déterminer la source des opérations fixes
+            source_salaire = 0.0
+            fixed_operations = []
+
+            if self.mois_actuel and any(getattr(d, 'est_fixe', False) for d in self._depenses):
+                source_salaire = self.mois_actuel.salaire
+                fixed_operations = [
+                    Depense(
+                        nom=d.nom,
+                        montant=d.montant,
+                        categorie=d.categorie,
+                        date_depense=d.date_depense,
+                        est_credit=d.est_credit,
+                        effectue=d.effectue,
+                        emprunte=d.emprunte,
+                        est_fixe=True
+                    ) for d in self._depenses if getattr(d, 'est_fixe', False)
+                ]
+            else:
+                # Chercher le dernier mois existant en base
+                mois_result = self._db_manager.get_all_mois()
+                if mois_result:
+                    last_mois = mois_result[0]
+                    source_salaire = last_mois.salaire
+                    deps = self._db_manager.get_depenses_by_mois(last_mois.id)
+                    fixed_operations = [
+                        Depense(
+                            nom=d.nom,
+                            montant=d.montant,
+                            categorie=d.categorie,
+                            date_depense=d.date_depense,
+                            est_credit=d.est_credit,
+                            effectue=d.effectue,
+                            emprunte=d.emprunte,
+                            est_fixe=True
+                        ) for d in deps if getattr(d, 'est_fixe', False)
+                    ]
+
+            # Validation du nom et du salaire déterminé
+            validation_result = self._validator.validate_mois_data(nom, str(source_salaire))
+            if not validation_result.is_valid:
+                return Result.error("; ".join(validation_result.errors))
+
+            # Création transactionnelle du mois
+            new_mois_id = self._db_manager.create_mois(validation_result.validated_data['nom'], validation_result.validated_data['salaire'])
+
+            # Insérer les opérations fixes si présentes
+            for dep in fixed_operations:
+                try:
+                    self._db_manager.create_depense(new_mois_id, dep)
+                except Exception:
+                    # Ne pas interrompre l'ensemble si une opération pose problème,
+                    # on loggue et on continue.
+                    logger.exception("Impossible d'insérer une opération fixe lors de la création du mois")
+
+            # Charger le mois créé en mémoire pour l'affichage
+            self.mois_actuel = Mois(nom=validation_result.validated_data['nom'], salaire=validation_result.validated_data['salaire'], id=new_mois_id)
+            self._depenses = self._db_manager.get_depenses_by_mois(new_mois_id)
+            self._displayed_depenses = self._depenses.copy()
+            self._current_search_term = ""
+
+            self._save_last_mois(self.mois_actuel.nom)
+            self.notify_observers('mois_created', self.mois_actuel)
+            return Result.success(f"Mois '{nom}' créé et prérempli avec {len(self._depenses)} opérations fixes")
+
+        except DatabaseError as e:
+            logger.error(f"Erreur DB lors création mois prérempli: {e}")
+            return Result.error(str(e))
+        except Exception as e:
+            logger.critical(f"Erreur inattendue lors création mois prérempli: {e}")
+            return Result.error("Une erreur inattendue s'est produite")
     
     def load_mois(self, nom: str) -> Result:
         """Charge un mois existant"""
