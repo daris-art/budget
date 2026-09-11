@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 import logging 
 from core.data_models import Depense, Mois, DatabaseError, Result
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,22 @@ class DatabaseManager:
             self.db_path = app_dir / "budget.db"
         self._init_database()
 
+    @contextmanager
+    def _get_connection(self):
+        """Context manager that yields a sqlite3 connection and always closes it.
+
+        Use this instead of calling sqlite3.connect(...) directly to ensure
+        connections are always closed even on error.
+        """
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     # ... (toutes les méthodes de la classe DatabaseManager de votre ancien utils.py vont ici) ...
     # Exemples : _init_database, create_mois, get_all_mois, update_depense, etc.
     # Le code de ces méthodes ne change pas, seule leur localisation.
@@ -28,7 +45,7 @@ class DatabaseManager:
     def _init_database(self):
         """Initialise la base de données et crée les tables"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute('''
@@ -70,7 +87,7 @@ class DatabaseManager:
     def create_mois(self, nom: str, salaire: float) -> int:
         """Crée un mois et retourne son ID"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
@@ -87,7 +104,7 @@ class DatabaseManager:
     def get_all_mois(self) -> List[Mois]:
         """Récupère tous les mois"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('SELECT id, nom, salaire, date_creation FROM mois ORDER BY date_creation DESC')
                 rows = cursor.fetchall()
@@ -98,7 +115,7 @@ class DatabaseManager:
     def get_mois_by_name(self, nom: str) -> Optional[Mois]:
         """Récupère un mois par son nom"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('SELECT id, nom, salaire, date_creation FROM mois WHERE nom = ?', (nom,))
                 row = cursor.fetchone()
@@ -114,7 +131,7 @@ class DatabaseManager:
         au sein d'une seule transaction.
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
 
                 # Étape 1 : Trouver l'ID du mois à partir de son nom.
@@ -147,7 +164,7 @@ class DatabaseManager:
     def update_mois_salaire(self, mois_id: int, salaire: float):
         """Met à jour le salaire d'un mois"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('UPDATE mois SET salaire = ? WHERE id = ?', (salaire, mois_id))
                 conn.commit()
@@ -157,7 +174,7 @@ class DatabaseManager:
     def update_mois_name(self, mois_id: int, new_name: str):
         """Met à jour le nom d'un mois."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('UPDATE mois SET nom = ? WHERE id = ?', (new_name, mois_id))
                 conn.commit()
@@ -169,7 +186,7 @@ class DatabaseManager:
     def get_depenses_by_mois(self, mois_id: int) -> List[Depense]:
         """Récupère toutes les dépenses pour un mois donné."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # --- CORRECTION ---
@@ -203,7 +220,7 @@ class DatabaseManager:
     def create_depense(self, mois_id: int, depense: Depense) -> int:
         """Crée une nouvelle dépense dans la base de données et retourne son ID."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # --- CORRECTION ---
@@ -237,7 +254,7 @@ class DatabaseManager:
     def update_depense(self, depense: Depense):
         """Met à jour une dépense existante dans la base de données."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 # --- MODIFICATION : Ajout de date_depense à la requête UPDATE ---
                 sql = '''
@@ -259,7 +276,7 @@ class DatabaseManager:
     def delete_depense(self, depense_id: int):
         """Supprime une dépense"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM depenses WHERE id = ?', (depense_id,))
                 conn.commit()
@@ -269,7 +286,7 @@ class DatabaseManager:
     def delete_all_depenses_by_mois(self, mois_id: int):
         """Supprime toutes les dépenses d'un mois"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM depenses WHERE mois_id = ?', (mois_id,))
                 conn.commit()
@@ -279,7 +296,7 @@ class DatabaseManager:
     def save_config(self, key: str, value: str):
         """Sauvegarde une valeur de configuration"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     'INSERT OR REPLACE INTO config (cle, valeur) VALUES (?, ?)',
@@ -292,7 +309,7 @@ class DatabaseManager:
     def get_config(self, key: str) -> Optional[str]:
         """Récupère une valeur de configuration"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('SELECT valeur FROM config WHERE cle = ?', (key,))
                 row = cursor.fetchone()
@@ -303,72 +320,68 @@ class DatabaseManager:
         
     def get_mois_by_id(self, mois_id: int) -> Optional[Mois]:
         """Récupère les détails d'un mois par son ID."""
-        conn = sqlite3.connect(self.db_path)
         try:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (mois_id,))
-            row = cursor.fetchone()
-            if row:
-                return Mois(id=row[0], nom=row[1], salaire=row[2])
-            return None
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (mois_id,))
+                row = cursor.fetchone()
+                if row:
+                    return Mois(id=row[0], nom=row[1], salaire=row[2])
+                return None
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération du mois par ID: {e}")
-        finally:
-            conn.close()
 
     def duplicate_mois(self, original_mois_id: int, new_mois_name: str) -> Result:
         """Crée une copie d'un mois existant avec toutes ses opérations au sein d'une seule transaction."""
-        conn = sqlite3.connect(self.db_path)
         try:
-            cursor = conn.cursor()
-            cursor.execute("BEGIN TRANSACTION")
-            try:
-                cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (original_mois_id,))
-                row = cursor.fetchone()
-                if not row:
-                    return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("BEGIN TRANSACTION")
+                try:
+                    cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (original_mois_id,))
+                    row = cursor.fetchone()
+                    if not row:
+                        return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
 
-                original_mois = Mois(id=row[0], nom=row[1], salaire=row[2])
+                    original_mois = Mois(id=row[0], nom=row[1], salaire=row[2])
 
-                cursor.execute(
-                    'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
-                    (new_mois_name, original_mois.salaire)
-                )
-                new_mois_id = cursor.lastrowid
-
-                cursor.execute(
-                    'SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte, est_fixe FROM depenses WHERE mois_id = ?',
-                    (original_mois_id,)
-                )
-                original_depenses = cursor.fetchall()
-
-                for depense in original_depenses:
-                    sql = '''
-                        INSERT INTO depenses (
-                            mois_id, nom, montant, categorie, date_depense, 
-                            est_credit, effectue, emprunte, est_fixe
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    '''
-                    values = (
-                        new_mois_id, depense[1], depense[2], depense[3], depense[4],
-                        bool(depense[5]), bool(depense[6]), bool(depense[7]), bool(depense[8])
+                    cursor.execute(
+                        'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
+                        (new_mois_name, original_mois.salaire)
                     )
-                    cursor.execute(sql, values)
+                    new_mois_id = cursor.lastrowid
 
-                conn.commit()
-                return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
+                    cursor.execute(
+                        'SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte, est_fixe FROM depenses WHERE mois_id = ?',
+                        (original_mois_id,)
+                    )
+                    original_depenses = cursor.fetchall()
 
-            except sqlite3.IntegrityError:
-                conn.rollback()
-                raise DatabaseError(f"Le mois '{new_mois_name}' existe déjà.")
-            except Exception as e:
-                conn.rollback()
-                raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
+                    for depense in original_depenses:
+                        sql = '''
+                            INSERT INTO depenses (
+                                mois_id, nom, montant, categorie, date_depense, 
+                                est_credit, effectue, emprunte, est_fixe
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        '''
+                        values = (
+                            new_mois_id, depense[1], depense[2], depense[3], depense[4],
+                            bool(depense[5]), bool(depense[6]), bool(depense[7]), bool(depense[8])
+                        )
+                        cursor.execute(sql, values)
+
+                    conn.commit()
+                    return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
+
+                except sqlite3.IntegrityError:
+                    conn.rollback()
+                    raise DatabaseError(f"Le mois '{new_mois_name}' existe déjà.")
+                except Exception as e:
+                    conn.rollback()
+                    raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
 
         except Exception as e:
             raise DatabaseError(f"Erreur de connexion lors de la duplication du mois : {e}")
-        finally:
-            conn.close()
         
     def import_new_mois(self, nom_mois: str, salaire: float, depenses: List[Depense]):
         """
@@ -376,7 +389,7 @@ class DatabaseManager:
         Retourne l'ID du nouveau mois créé.
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("BEGIN TRANSACTION")
                 try:
@@ -418,7 +431,7 @@ class DatabaseManager:
         Trie les résultats par date de création du mois.
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._get_connection() as conn:
                 conn.row_factory = sqlite3.Row  # Permet d'accéder aux colonnes par leur nom
                 cursor = conn.cursor()
                 

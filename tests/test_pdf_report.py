@@ -36,6 +36,22 @@ class PdfReportExportTests(unittest.TestCase):
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 0)
 
+    def test_export_month_report_pdf_sorted_by_amount(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db = DatabaseManager(Path(tmp_dir) / 'budget.db')
+            mois_id = db.create_mois('Fev 2026', 2000.0)
+            db.create_depense(mois_id, Depense(nom='A', montant=10.0, categorie='X', date_depense='01/02/2026'))
+            db.create_depense(mois_id, Depense(nom='B', montant=5.0, categorie='Y', date_depense='02/02/2026'))
+
+            service = ImportExportService(db)
+            output = Path(tmp_dir) / 'rapport_sorted.pdf'
+
+            result = service.export_month_report_pdf_sorted_by_amount(mois_id, output)
+
+            self.assertTrue(result.is_success, result.error)
+            self.assertTrue(output.exists())
+            self.assertGreater(output.stat().st_size, 0)
+
     def test_model_get_bitcoin_price_uses_api_service(self):
         model = BudgetModel(None, None, None, FakeBitcoinAPIService())
 
