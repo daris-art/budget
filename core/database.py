@@ -303,69 +303,72 @@ class DatabaseManager:
         
     def get_mois_by_id(self, mois_id: int) -> Optional[Mois]:
         """Récupère les détails d'un mois par son ID."""
+        conn = sqlite3.connect(self.db_path)
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (mois_id,))
-                row = cursor.fetchone()
-                if row:
-                    return Mois(id=row[0], nom=row[1], salaire=row[2])
-                return None
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (mois_id,))
+            row = cursor.fetchone()
+            if row:
+                return Mois(id=row[0], nom=row[1], salaire=row[2])
+            return None
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération du mois par ID: {e}")
+        finally:
+            conn.close()
 
     def duplicate_mois(self, original_mois_id: int, new_mois_name: str) -> Result:
         """Crée une copie d'un mois existant avec toutes ses opérations au sein d'une seule transaction."""
+        conn = sqlite3.connect(self.db_path)
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                # On démarre explicitement la transaction
-                cursor.execute("BEGIN TRANSACTION")
-                try:
-                    # Étape 1 : Récupérer les détails du mois original (hors transaction)
-                    original_mois = self.get_mois_by_id(original_mois_id)
-                    if not original_mois:
-                        # Pas besoin d'annuler si rien n'a commencé
-                        return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
+            cursor = conn.cursor()
+            cursor.execute("BEGIN TRANSACTION")
+            try:
+                cursor.execute('SELECT id, nom, salaire FROM mois WHERE id = ?', (original_mois_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return Result.error("Le mois original à dupliquer n'a pas été trouvé.")
 
-                    # Étape 2 : Créer le nouveau mois
-                    cursor.execute(
-                        'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
-                        (new_mois_name, original_mois.salaire)
+                original_mois = Mois(id=row[0], nom=row[1], salaire=row[2])
+
+                cursor.execute(
+                    'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
+                    (new_mois_name, original_mois.salaire)
+                )
+                new_mois_id = cursor.lastrowid
+
+                cursor.execute(
+                    'SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte, est_fixe FROM depenses WHERE mois_id = ?',
+                    (original_mois_id,)
+                )
+                original_depenses = cursor.fetchall()
+
+                for depense in original_depenses:
+                    sql = '''
+                        INSERT INTO depenses (
+                            mois_id, nom, montant, categorie, date_depense, 
+                            est_credit, effectue, emprunte, est_fixe
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    '''
+                    values = (
+                        new_mois_id, depense[1], depense[2], depense[3], depense[4],
+                        bool(depense[5]), bool(depense[6]), bool(depense[7]), bool(depense[8])
                     )
-                    new_mois_id = cursor.lastrowid
+                    cursor.execute(sql, values)
 
-                    # Étape 3 : Récupérer toutes les opérations du mois original
-                    original_depenses = self.get_depenses_by_mois(original_mois_id)
+                conn.commit()
+                return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
 
-                    # Étape 4 : Insérer des copies de ces opérations pour le nouveau mois
-                    for depense in original_depenses:
-                        sql = '''
-                            INSERT INTO depenses (
-                                mois_id, nom, montant, categorie, date_depense, 
-                                est_credit, effectue, emprunte, est_fixe
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        '''
-                        values = (
-                            new_mois_id, depense.nom, depense.montant, depense.categorie,
-                            depense.date_depense, depense.est_credit, depense.effectue, depense.emprunte, depense.est_fixe
-                        )
-                        cursor.execute(sql, values)
-                    
-                    # Si tout s'est bien passé jusqu'ici, on valide toutes les modifications
-                    conn.commit()
-                    return Result.success(f"Mois '{original_mois.nom}' dupliqué avec succès en '{new_mois_name}'.")
-
-                except sqlite3.IntegrityError:
-                    conn.rollback() # Annule tout en cas de nom de mois dupliqué
-                    raise DatabaseError(f"Le mois '{new_mois_name}' existe déjà.")
-                except Exception as e:
-                    conn.rollback() # Annule tout si une autre erreur survient
-                    raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
+            except sqlite3.IntegrityError:
+                conn.rollback()
+                raise DatabaseError(f"Le mois '{new_mois_name}' existe déjà.")
+            except Exception as e:
+                conn.rollback()
+                raise DatabaseError(f"Erreur lors de la duplication du mois : {e}")
 
         except Exception as e:
-            # Lève une exception qui sera attrapée par le modèle
             raise DatabaseError(f"Erreur de connexion lors de la duplication du mois : {e}")
+        finally:
+            conn.close()
         
     def import_new_mois(self, nom_mois: str, salaire: float, depenses: List[Depense]):
         """

@@ -3,8 +3,14 @@ import unittest
 from pathlib import Path
 
 from core.database import DatabaseManager
-from core.data_models import Depense
+from core.data_models import Depense, Result
+from core.model import BudgetModel
 from core.services import ImportExportService
+
+
+class FakeBitcoinAPIService:
+    def get_price(self):
+        return Result.success(data=123.45)
 
 
 class PdfReportExportTests(unittest.TestCase):
@@ -29,6 +35,14 @@ class PdfReportExportTests(unittest.TestCase):
             self.assertTrue(result.is_success, result.error)
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 0)
+
+    def test_model_get_bitcoin_price_uses_api_service(self):
+        model = BudgetModel(None, None, None, FakeBitcoinAPIService())
+
+        result = model.get_bitcoin_price()
+
+        self.assertTrue(result.is_success)
+        self.assertEqual(result.data, 123.45)
 
 
 if __name__ == '__main__':

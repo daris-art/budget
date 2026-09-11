@@ -3,7 +3,6 @@
 import logging
 from typing import List, Optional, Tuple, Dict
 from datetime import datetime
-import requests
 from pathlib import Path 
 import re
 # Imports depuis la nouvelle structure
@@ -272,38 +271,6 @@ class BudgetModel(Observable):
     def get_bitcoin_price(self) -> Result:
         """Délègue l'appel API au service concerné."""
         return self._api_service.get_price()
-       
-    def get_bitcoin_price(self) -> Result:
-        """
-        Récupère le prix actuel du Bitcoin en Euros via l'API CoinGecko.
-        """
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            "ids": "bitcoin",
-            "vs_currencies": "eur"
-        }
-        try:
-            # On met un timeout pour ne pas attendre indéfiniment
-            response = requests.get(url, params=params, timeout=10)
-            # Lève une exception si la requête a échoué (ex: erreur 404, 500)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # On extrait le prix de la réponse JSON : {"bitcoin":{"eur":60000.12}}
-            price = data.get("bitcoin", {}).get("eur")
-            
-            if price is None:
-                return Result.error("Format de réponse de l'API inattendu.")
-            
-            return Result.success(data=price)
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur réseau lors de la récupération du prix du BTC: {e}")
-            return Result.error("Erreur réseau. Vérifiez votre connexion.")
-        except Exception as e:
-            logger.error(f"Erreur inattendue lors de la récupération du prix du BTC: {e}")
-            return Result.error("Une erreur inattendue est survenue.")
 
     def get_total_revenus(self) -> float:
         """Retourne le total des revenus (opérations de crédit)."""

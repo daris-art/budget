@@ -217,11 +217,6 @@ class BudgetController:
                 self.view.hide_progress_bar()
                 self.view.set_month_actions_enabled(True)
 
-    def handle_set_salaire(self):
-        """Gère la mise à jour du salaire."""
-        # Supprimé : Le salaire est maintenant un revenu comme les autres.
-        pass
-
     def handle_add_expense(self):
         """Gère l'ajout d'une nouvelle dépense."""
         if self.model.mois_actuel:
