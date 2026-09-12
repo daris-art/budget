@@ -1,49 +1,49 @@
-# Budget Application
+# Application de Gestion de Budget
 
-A professional budget management application built with PyQt6. This application helps you track expenses, manage budgets, and generate financial reports with Bitcoin price integration.
+Une application professionnelle de gestion budgétaire construite avec PyQt6. Cette application vous aide à suivre vos dépenses, gérer vos budgets et générer des rapports financiers avec intégration des prix du Bitcoin.
 
-## Features
+## Fonctionnalités
 
-- **Expense Management**: Add, edit, and delete expenses with categories, dates, and amounts
-- **Category Organization**: Organize expenses by custom categories
-- **Data Validation**: Built-in validation for all data entries
-- **Database Management**: SQLite database for persistent data storage
-- **Import/Export**: Import and export financial data to/from various formats
-- **Bitcoin Integration**: Real-time Bitcoin API integration for cryptocurrency tracking
-- **Graph Visualization**: Visual representation of expense data
-- **PDF Reports**: Generate professional PDF reports of your budget
-- **Dark Theme**: Professional dark theme UI with PyQt Dark Theme
-- **Task Workers**: Asynchronous task processing for smooth user experience
+- **Gestion des Dépenses**: Ajoutez, modifiez et supprimez des dépenses avec catégories, dates et montants
+- **Organisation par Catégories**: Organisez les dépenses selon des catégories personnalisées
+- **Validation des Données**: Validation intégrée pour tous les saisies de données
+- **Gestion de Base de Données**: Base de données SQLite pour stockage persistant
+- **Import/Export**: Importez et exportez les données financières vers/depuis divers formats
+- **Intégration Bitcoin**: Intégration API Bitcoin en temps réel pour le suivi des cryptomonnaies
+- **Visualisation Graphique**: Représentation visuelle des données de dépenses
+- **Rapports PDF**: Générez des rapports PDF professionnels de votre budget
+- **Thème Sombre**: Interface utilisateur avec thème sombre professionnel (PyQt Dark Theme)
+- **Travailleurs Asynchrones**: Traitement des tâches asynchrone pour une expérience utilisateur fluide
 
-## Project Structure
+## Structure du Projet
 
 ```
 budget/
-├── main.py                      # Application entry point
-├── controller.py                # Business logic controller (MVC pattern)
-├── view.py                      # Main UI view (MVC pattern)
-├── graph_view.py                # Graph visualization component
-├── migrate_json_to_sqlite.py   # Data migration utility
-├── bob.sh                       # Shell script utility
-├── requirements.txt             # Project dependencies
+├── main.py                      # Point d'entrée de l'application
+├── controller.py                # Contrôleur logique métier (pattern MVC)
+├── view.py                      # Vue principale de l'interface (pattern MVC)
+├── graph_view.py                # Composant de visualisation graphique
+├── migrate_json_to_sqlite.py   # Utilitaire de migration des données
+├── bob.sh                       # Utilitaire script shell
+├── requirements.txt             # Dépendances du projet
 │
-├── core/                        # Core application modules
+├── core/                        # Modules applicatifs principaux
 │   ├── __init__.py
-│   ├── model.py                # Data model (MVC pattern)
-│   ├── data_models.py          # Data classes and exceptions
-│   ├── database.py             # Database management and queries
-│   ├── services.py             # Business services (import/export, API)
-│   └── validation.py           # Data validation logic
+│   ├── model.py                # Modèle de données (pattern MVC)
+│   ├── data_models.py          # Classes de données et exceptions
+│   ├── database.py             # Gestion de base de données et requêtes
+│   ├── services.py             # Services métier (import/export, API)
+│   └── validation.py           # Logique de validation des données
 │
-├── ui/                          # UI components
+├── ui/                          # Composants d'interface utilisateur
 │   ├── __init__.py
-│   └── custom_widgets.py       # Custom PyQt6 widgets
+│   └── custom_widgets.py       # Widgets PyQt6 personnalisés
 │
-├── workers/                     # Async task workers
+├── workers/                     # Travailleurs de tâches asynchrones
 │   ├── __init__.py
-│   └── task_workers.py         # Background task processing
+│   └── task_workers.py         # Traitement des tâches en arrière-plan
 │
-└── tests/                       # Test suite
+└── tests/                       # Suite de tests
     ├── test_bitcoin_service.py
     ├── test_database.py
     ├── test_model_filtering.py
@@ -52,119 +52,119 @@ budget/
 
 ## Architecture
 
-This application follows the **Model-View-Controller (MVC)** pattern:
+Cette application suit le pattern **Model-View-Controller (MVC)**:
 
-- **Model** (`core/model.py`): Manages application data and business logic
-- **View** (`view.py`): Handles the user interface with PyQt6
-- **Controller** (`controller.py`): Mediates between Model and View
+- **Modèle** (`core/model.py`): Gère les données et la logique métier de l'application
+- **Vue** (`view.py`): Gère l'interface utilisateur avec PyQt6
+- **Contrôleur** (`controller.py`): Fait la médiation entre le Modèle et la Vue
 
-### Core Components
+### Composants Principaux
 
-- **DatabaseManager**: Handles all SQLite database operations
-- **DataValidator**: Validates user input and data integrity
-- **ImportExportService**: Manages data import/export operations
-- **BitcoinAPIService**: Integrates with Bitcoin API for real-time data
+- **DatabaseManager**: Gère toutes les opérations de base de données SQLite
+- **DataValidator**: Valide les entrées utilisateur et l'intégrité des données
+- **ImportExportService**: Gère les opérations d'import/export de données
+- **BitcoinAPIService**: Intègre l'API Bitcoin pour les données en temps réel
 
 ## Installation
 
-### Prerequisites
+### Prérequis
 
 - Python 3.7+
-- pip (Python package manager)
+- pip (gestionnaire de paquets Python)
 
-### Setup
+### Configuration
 
-1. Clone or download this project:
+1. Clonez ou téléchargez ce projet:
 ```bash
 cd budget
 ```
 
-2. Install dependencies:
+2. Installez les dépendances:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Dependencies
+## Dépendances
 
-- **PyQt6**: GUI framework
-- **matplotlib**: Data visualization and graphing
-- **requests**: HTTP library for API calls
-- **openpyxl**: Excel file handling
-- **pyqtdarktheme**: Dark theme for PyQt6
-- **reportlab**: PDF generation
+- **PyQt6**: Framework d'interface graphique
+- **matplotlib**: Visualisation et graphiques de données
+- **requests**: Bibliothèque HTTP pour les appels API
+- **openpyxl**: Gestion des fichiers Excel
+- **pyqtdarktheme**: Thème sombre pour PyQt6
+- **reportlab**: Génération de PDF
 
-## Usage
+## Utilisation
 
-### Running the Application
+### Lancer l'Application
 
 ```bash
 python main.py
 ```
 
-### Data Migration
+### Migration des Données
 
-To migrate data from JSON to SQLite:
+Pour migrer les données de JSON vers SQLite:
 
 ```bash
 python migrate_json_to_sqlite.py
 ```
 
-## Testing
+## Tests
 
-Run the test suite:
+Exécutez la suite de tests:
 
 ```bash
 pytest tests/
 ```
 
-Individual test modules:
-- `test_bitcoin_service.py`: Bitcoin API integration tests
-- `test_database.py`: Database operations tests
-- `test_model_filtering.py`: Data filtering tests
-- `test_pdf_report.py`: PDF report generation tests
+Modules de test individuels:
+- `test_bitcoin_service.py`: Tests d'intégration de l'API Bitcoin
+- `test_database.py`: Tests des opérations de base de données
+- `test_model_filtering.py`: Tests de filtrage des données
+- `test_pdf_report.py`: Tests de génération de rapports PDF
 
-## Development
+## Développement
 
-### Key Features to Explore
+### Fonctionnalités Principales à Explorer
 
-1. **Expense Management**: Track expenses with dates, amounts, and categories
-2. **Budget Analytics**: View spending patterns through graphs
-3. **Report Generation**: Create PDF reports of budget summaries
-4. **Data Import/Export**: Transfer data to other formats
-5. **Bitcoin Tracking**: Monitor Bitcoin prices alongside expense data
+1. **Gestion des Dépenses**: Suivez les dépenses avec dates, montants et catégories
+2. **Analyse Budgétaire**: Visualisez les tendances de dépenses via des graphiques
+3. **Génération de Rapports**: Créez des rapports PDF de résumés budgétaires
+4. **Import/Export de Données**: Transférez les données vers d'autres formats
+5. **Suivi du Bitcoin**: Surveillez les prix du Bitcoin en parallèle de vos dépenses
 
-### Project Conventions
+### Conventions de Projet
 
-- All database operations go through `DatabaseManager`
-- All user input is validated through `DataValidator`
-- Business logic is handled in `core/services.py`
-- UI components are in `view.py` and `ui/custom_widgets.py`
-- Asynchronous tasks use `task_workers.py`
+- Toutes les opérations de base de données passent par `DatabaseManager`
+- Toutes les entrées utilisateur sont validées via `DataValidator`
+- La logique métier est gérée dans `core/services.py`
+- Les composants d'interface utilisateur sont dans `view.py` et `ui/custom_widgets.py`
+- Les tâches asynchrones utilisent `task_workers.py`
 
 ## Configuration
 
-Configuration files are typically stored in `~/.config/` or project directories. Database files are stored locally for easy access and backup.
+Les fichiers de configuration sont généralement stockés dans `~/.config/` ou dans les répertoires du projet. Les fichiers de base de données sont stockés localement pour un accès facile et une sauvegarde.
 
-## Troubleshooting
+## Dépannage
 
-### Common Issues
+### Problèmes Courants
 
-- **Import Errors**: Ensure all dependencies are installed via `pip install -r requirements.txt`
-- **Database Errors**: Check that you have write permissions in the project directory
-- **API Errors**: Verify internet connection for Bitcoin API calls
+- **Erreurs d'Import**: Assurez-vous que toutes les dépendances sont installées via `pip install -r requirements.txt`
+- **Erreurs de Base de Données**: Vérifiez que vous avez les permissions d'écriture dans le répertoire du projet
+- **Erreurs d'API**: Vérifiez la connexion Internet pour les appels API Bitcoin
 
-## License
+## Licence
 
-[Add your license here]
+[Ajoutez votre licence ici]
 
-## Contributing
+## Contribution
 
-[Add contribution guidelines here]
+[Ajoutez les directives de contribution ici]
 
 ## Support
 
-For issues or questions, please refer to the test files for usage examples of each component.
+Pour les problèmes ou questions, veuillez consulter les fichiers de test pour des exemples d'utilisation de chaque composant.
 
 ---
 
-**Last Updated**: 2026-09-12
+**Dernière mise à jour**: 2026-09-12
