@@ -381,6 +381,13 @@ class BudgetView(QMainWindow):
         self.btn_generate_pdf_report_by_amount.clicked.connect(self.controller.handle_generate_month_report_pdf_sorted_by_amount)
         info_layout.addWidget(self.btn_generate_pdf_report_by_amount)
 
+        # Bouton d'aide pour expliquer les raccourcis de sélection
+        self.btn_help_shortcuts = QPushButton("❓ Aide")
+        self.btn_help_shortcuts.setToolTip("Afficher l'aide sur les raccourcis de sélection")
+        self.btn_help_shortcuts.clicked.connect(self._show_shortcuts_help)
+        self.btn_help_shortcuts.setFixedWidth(90)
+        info_layout.addWidget(self.btn_help_shortcuts)
+
         info_layout.addStretch()
 
         # Bouton pour supprimer toutes les lignes sélectionnées
@@ -624,6 +631,45 @@ class BudgetView(QMainWindow):
         count = len(ids)
         msg = f"{count} ligne supprimée" if count == 1 else f"{count} lignes supprimées"
         self.update_status_bar(msg, duration=3000)
+
+    def _show_shortcuts_help(self):
+        """Affiche une boîte de dialogue expliquant les raccourcis de sélection et suppression."""
+        help_text = """
+<h3 style="text-align: center; color: #3B82F6;">Raccourcis de Sélection</h3>
+
+<p><b>Ctrl + Clic :</b><br/>
+Ajoute ou retire la ligne de la sélection (sélection multiple).</p>
+
+<p><b>Maj + Clic :</b><br/>
+Sélectionne toutes les lignes entre la dernière sélection et la ligne cliquée (intervalle).</p>
+
+<p><b>Maj + Ctrl + Clic :</b><br/>
+Combine les deux: sélectionne un intervalle et l'ajoute à la sélection existante.</p>
+
+<h3 style="text-align: center; color: #3B82F6;">Raccourcis de Suppression</h3>
+
+<p><b>Ctrl + S :</b><br/>
+Supprime la ligne actuellement en édition (celle avec le focus).</p>
+
+<p><b>Ctrl + Suppr :</b><br/>
+Supprime toutes les lignes sélectionnées d'un coup.</p>
+
+<h3 style="text-align: center; color: #3B82F6;">Autres Raccourcis</h3>
+
+<p><b>Ctrl + O :</b><br/>
+Ajoute une nouvelle opération.</p>
+
+<p><b>Ctrl + G :</b><br/>
+Affiche les graphiques financiers.</p>
+        """
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Aide - Raccourcis Clavier")
+        msg_box.setText(help_text)
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.exec()
 
     # --- MODIFICATION DE LA GESTION DES ÉVÉNEMENTS CLAVIER ---
 

@@ -4,4 +4,4 @@ requests
 openpyxl
 pyqtdarktheme
 reportlab
-
+pandas

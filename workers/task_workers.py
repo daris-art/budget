@@ -45,6 +45,7 @@ class AlsaceExcelImportWorker(QObject):
     def run(self):
         try:
             import pandas as pd
+            
             df = pd.read_excel(self.filepath)
 
             # Vérifie que les colonnes attendues existent
@@ -54,13 +55,10 @@ class AlsaceExcelImportWorker(QObject):
                     self.finished.emit(Result.error(f"Colonne manquante: {col}"))
                     return
 
-            # Crée le mois
-            result = self.model.create_mois(self.new_name)
-            if not result.is_success:
-                self.finished.emit(result)
-                return
+            # Prépare la liste de toutes les dépenses avant la transaction
+            depenses_to_import = []
 
-            # Parcourt les lignes
+            # Parcourt les lignes et prépare les objets Depense
             for _, row in df.iterrows():
                 try:
                     date_str = pd.to_datetime(row["Date"], dayfirst=True, errors="coerce").strftime("%d/%m/%Y")
@@ -73,27 +71,36 @@ class AlsaceExcelImportWorker(QObject):
 
                 if debit == 0 and credit > 0:
                     est_credit = True
-                    montant_str = str(credit)
+                    montant = credit
                 elif credit == 0 and debit > 0:
                     est_credit = False
-                    montant_str = str(debit)
+                    montant = debit
                 else:
                     continue  # ligne invalide ou vide
 
                 depense = Depense(
                     nom=libelle,
-                    montant=float(montant_str),
+                    montant=montant,
                     date_depense=date_str,
                     categorie="Revenue" if est_credit else "Autres",
                     effectue=False,
                     emprunte=False,
-                    est_fixe=False
+                    est_fixe=False,
+                    est_credit=est_credit
                 )
-                depense.est_credit = est_credit
-                depense_id = self.model._db_manager.create_depense(self.model.mois_actuel.id, depense)
-                depense.id = depense_id
-                self.model._depenses.append(depense)
+                depenses_to_import.append(depense)
 
-            self.finished.emit(Result.success("Import Alsace terminé"))
+            # Crée le mois et toutes ses dépenses en une seule transaction atomique
+            mois_id = self.model._db_manager.create_mois_with_depenses_transaction(
+                self.new_name, 
+                0.0,  # salaire par défaut
+                depenses_to_import
+            )
+            
+            # Charge les dépenses dans le modèle
+            self.model.mois_actuel = self.model._db_manager.get_mois_by_name(self.new_name)
+            self.model._depenses = self.model._db_manager.get_depenses_by_mois(mois_id)
+
+            self.finished.emit(Result.success(f"Import Alsace terminé: {len(depenses_to_import)} lignes importées"))
         except Exception as e:
             self.finished.emit(Result.error(f"Erreur import Alsace: {e}"))

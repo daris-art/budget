@@ -86,6 +86,53 @@ class ImportCategoryClassifier:
         return best_category
 
 
+class FixedExpenseClassifier:
+    """Détecte si une dépense est fixe basée sur des mots-clés."""
+    
+    FIXED_EXPENSE_KEYWORDS = [
+        # Loyer et habitation
+        "loyer", "copropriete", "syndic", "charges courantes",
+        # Services publics
+        "edf", "electricite", "gaz", "eau", "engie", "energie", "chauffage",
+        # Assurances
+        "assurance", "assurence", "mutuelle", "secu", "habitation"
+        # Abonnements et communications
+        "orange", "free", "sfr", "box", "internet", "telephone", "mobile", "canal", "redbysfr"
+        "canal+", "netflix", "spotify", "youtube premium",
+        # Transports réguliers
+        "navigo", "abonnement", "train", "bus", "metro",
+        # Prêts et crédits
+        "pret", "crédit", "emprunt", "remboursement", "credit",
+        # Santé régulière
+        "mutuelle", "pharmacie", "medecin", "docteur",
+        # Autres charges régulières
+        "cotisation", "adhesion", "licence", "inscription", "salaire", "caf",
+    ]
+
+    @staticmethod
+    def normalize_label(label: str) -> str:
+        if not label:
+            return ""
+        normalized = str(label).lower()
+        for accented, plain in {"é": "e", "è": "e", "à": "a", "ç": "c", "ù": "u"}.items():
+            normalized = normalized.replace(accented, plain)
+        normalized = ''.join(ch if ch.isalnum() or ch.isspace() else ' ' for ch in normalized)
+        return ' '.join(normalized.split())
+
+    @classmethod
+    def is_fixed_expense(cls, label: str) -> bool:
+        """Retourne True si la dépense est considérée comme fixe."""
+        normalized = cls.normalize_label(label)
+        if not normalized:
+            return False
+        
+        for keyword in cls.FIXED_EXPENSE_KEYWORDS:
+            normalized_keyword = cls.normalize_label(keyword)
+            if normalized_keyword in normalized:
+                return True
+        return False
+
+
 class BitcoinAPIService:
     """Service pour récupérer le prix du Bitcoin."""
     def get_price(self) -> Result:
@@ -400,7 +447,8 @@ class ImportExportService:
                     date_depense=dep_data.get('date_depense', datetime.datetime.now().strftime('%d/%m/%Y')),
                     est_credit=dep_data.get('est_credit', False),
                     effectue=dep_data.get('effectue', False),
-                    emprunte=dep_data.get('emprunte', False)
+                    emprunte=dep_data.get('emprunte', False),
+                    est_fixe=dep_data.get('est_fixe', False)
                 ))
             
             # On appelle la méthode transactionnelle
@@ -495,7 +543,7 @@ class ImportExportService:
                         est_credit=est_credit,
                         effectue=True,
                         emprunte=False,
-                        est_fixe=False
+                        est_fixe=FixedExpenseClassifier.is_fixed_expense(str(nom))
                     )
                 )
 

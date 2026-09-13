@@ -11,6 +11,7 @@
         "/^python -m py_compile /home/daris/dev/python/budget/budget/core/model\\.py && python -m py_compile /home/daris/dev/python/budget/budget/controller\\.py && python -m py_compile /home/daris/dev/python/budget/budget/view\\.py$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "pip": true
     }
 }

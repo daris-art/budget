@@ -101,6 +101,65 @@ class DatabaseManager:
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la création du mois: {e}")
     
+    def create_mois_with_depenses_transaction(self, nom: str, salaire: float, depenses_list: List[Depense]) -> int:
+        """
+        Crée un mois avec toutes ses dépenses en une seule transaction atomique.
+        Si une erreur survient, tout est annulé (le mois n'est pas créé).
+        Retourne l'ID du mois créé.
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Démarre une transaction explicite
+                cursor.execute('BEGIN TRANSACTION')
+                
+                try:
+                    # Crée le mois
+                    cursor.execute(
+                        'INSERT INTO mois (nom, salaire) VALUES (?, ?)',
+                        (nom, salaire)
+                    )
+                    mois_id = cursor.lastrowid
+                    
+                    # Insère toutes les dépenses
+                    sql = '''
+                        INSERT INTO depenses (
+                            mois_id, nom, montant, categorie, 
+                            date_depense, est_credit, effectue, emprunte, est_fixe
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    '''
+                    
+                    for depense in depenses_list:
+                        values = (
+                            mois_id,
+                            depense.nom,
+                            depense.montant,
+                            depense.categorie,
+                            depense.date_depense,
+                            depense.est_credit,
+                            depense.effectue,
+                            depense.emprunte,
+                            depense.est_fixe
+                        )
+                        cursor.execute(sql, values)
+                    
+                    # Valide la transaction
+                    conn.commit()
+                    return mois_id
+                    
+                except (sqlite3.IntegrityError, sqlite3.Error) as e:
+                    # Annule la transaction en cas d'erreur
+                    conn.rollback()
+                    if isinstance(e, sqlite3.IntegrityError):
+                        raise DatabaseError(f"Le mois '{nom}' existe déjà")
+                    raise DatabaseError(f"Erreur lors de la création du mois avec dépenses: {e}")
+                    
+        except DatabaseError:
+            raise
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Erreur de connexion base de données: {e}")
+    
     def get_all_mois(self) -> List[Mois]:
         """Récupère tous les mois"""
         try:
@@ -397,17 +456,18 @@ class DatabaseManager:
                     cursor.execute('INSERT INTO mois (nom, salaire) VALUES (?, ?)', (nom_mois, salaire))
                     new_mois_id = cursor.lastrowid
 
-                    # 2. Insérer toutes les dépenses
+                    # 2. Insérer toutes les dépenses (avec est_fixe!)
                     for dep in depenses:
                         sql = '''
                             INSERT INTO depenses (
                                 mois_id, nom, montant, categorie, date_depense, 
-                                est_credit, effectue, emprunte
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                est_credit, effectue, emprunte, est_fixe
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         '''
                         values = (
                             new_mois_id, dep.nom, dep.montant, dep.categorie,
-                            dep.date_depense, dep.est_credit, dep.effectue, dep.emprunte
+                            dep.date_depense, dep.est_credit, dep.effectue, dep.emprunte,
+                            dep.est_fixe
                         )
                         cursor.execute(sql, values)
                     

@@ -154,12 +154,10 @@ Les fichiers de configuration sont généralement stockés dans `~/.config/` ou 
 - **Erreurs d'API**: Vérifiez la connexion Internet pour les appels API Bitcoin
 
 ## Licence
-
-[Ajoutez votre licence ici]
+GPL
 
 ## Contribution
 
-[Ajoutez les directives de contribution ici]
 
 ## Support
 
