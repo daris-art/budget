@@ -39,6 +39,12 @@ class BudgetController:
         self.search_timer.setInterval(400) 
         self.search_timer.timeout.connect(self._perform_search)
 
+        # --- AJOUT : Timer pour forcer les mises à jour GUI pendant le chargement ---
+        self._gui_update_timer = QTimer()
+        self._gui_update_timer.setSingleShot(False)
+        self._gui_update_timer.setInterval(50)  # Toutes les 50ms
+        self._gui_update_timer.timeout.connect(self._process_gui_events)
+
     def set_view(self, view):
         """Associe la vue à ce contrôleur."""
         self.view = view
@@ -96,6 +102,7 @@ class BudgetController:
         self.view.set_month_actions_enabled(False)
         self.view.update_status_bar(f"Importation de '{filepath.name}' en cours...", duration=0)
         self.view.show_progress_bar(indeterminate=True)
+        self._gui_update_timer.start()  # Démarre le timer pour animer la barre
         QApplication.processEvents()
         
         self.import_thread = QThread()
@@ -125,6 +132,7 @@ class BudgetController:
         self.view.set_month_actions_enabled(False)
         self.view.update_status_bar(f"Importation Alsace '{filepath.name}'...", duration=0)
         self.view.show_progress_bar(indeterminate=True)
+        self._gui_update_timer.start()  # Démarre le timer pour animer la barre
         QApplication.processEvents()
 
         from workers.task_workers import AlsaceExcelImportWorker
@@ -453,6 +461,7 @@ class BudgetController:
 
     def _on_import_excel_finished(self, result: Result):
         """Slot qui gère le résultat une fois l'import en arrière-plan terminé."""
+        self._gui_update_timer.stop()  # Arrête le timer d'animation
         self._handle_result(result)
         if result.is_success and self.import_worker:
             new_name = self.import_worker.new_name
@@ -524,12 +533,14 @@ class BudgetController:
         self.view.set_month_actions_enabled(False)
         self.view.clear_for_loading(f"Chargement de '{nom_mois}'...")
         self.view.show_progress_bar(indeterminate=True)
+        self._gui_update_timer.start()  # Démarre le timer pour forcer les updates GUI
         QApplication.processEvents()
         def do_load():
             try:
                 result = self.model.load_mois(nom_mois)
                 self._handle_result(result, show_success=False)
             finally:
+                self._gui_update_timer.stop()  # Arrête le timer
                 self.view.hide_progress_bar()
                 self.view.set_month_actions_enabled(True)
         QTimer.singleShot(50, do_load)
@@ -541,6 +552,10 @@ class BudgetController:
             self.view.update_complete_display(display_data)
             self.view.update_status_bar("Affichage mis à jour.")
             self.view.scroll_expenses_to_top()
+
+    def _process_gui_events(self):
+        """Force la boucle d'événements GUI à traiter les événements pour animer la barre de progression."""
+        QApplication.processEvents()
 
     def _refresh_summary_view(self):
         """Ne met à jour que le récapitulatif."""
