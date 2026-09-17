@@ -381,13 +381,16 @@ class BudgetView(QMainWindow):
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             elif header == "Actions":
                 # Décale le texte centré de 8 px vers la droite.
-                label.setContentsMargins(0, 0, 28, 0)
+                label.setContentsMargins(0, 0, 46, 0)
                 alignment = Qt.AlignmentFlag.AlignCenter
             elif header in ("Payé", "Prêt", "Fixe"):
                 label.setIndent(20)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             elif header in ("Type"):
-                label.setIndent(0)
+                label.setIndent(6)
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            elif header in ("Nom"):
+                label.setIndent(20)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             else:
                 label.setIndent(8)
