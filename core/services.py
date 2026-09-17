@@ -95,7 +95,7 @@ class FixedExpenseClassifier:
         # Services publics
         "edf", "electricite", "gaz", "eau", "engie", "energie", "chauffage",
         # Assurances
-        "assurance", "assurence", "mutuelle", "secu", "habitation"
+        "assurance", "assurence", "mutuelle", "secu", "habitation", "assu.", "assu"
         # Abonnements et communications
         "orange", "free", "sfr", "box", "internet", "telephone", "mobile", "canal", "redbysfr"
         "canal+", "netflix", "spotify", "youtube premium",

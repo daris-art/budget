@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import qdarktheme
@@ -95,6 +96,13 @@ class BudgetView(QMainWindow):
         self.last_selected_index: Optional[int] = None
         self.selected_rows_total_label: Optional[QLabel] = None
         self._scroll_on_range_change = False
+        self._rendering_expenses = False
+        self._disabled_shortcuts = None
+        self._render_expenses = []
+        self._render_index = 0
+        self._render_timer = QTimer(self)
+        self._render_timer.setInterval(10)
+        self._render_timer.timeout.connect(self._render_expense_batch)
 
         self.amount_validator = QDoubleValidator(0.00, 999999999.99, 2)
         self.amount_validator.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
@@ -209,15 +217,50 @@ class BudgetView(QMainWindow):
     
     # --- NOUVELLE MÉTHODE POUR RAFRAÎCHIR LA LISTE ---
     def refresh_expense_list(self, expenses_to_display: List[Any]):
-        """Vide et repeuple la liste des dépenses avec les données fournies."""
+        """Construit les grandes listes par lots pour laisser Qt animer la barre."""
         self.clear_all_expenses()
-        for i, depense in enumerate(expenses_to_display):
-            self.add_expense_widget(depense, i)
-        self._refresh_expense_line_numbers()
-        # S'assure que l'UI est fluide même avec beaucoup d'éléments
-        QApplication.processEvents()
+        expenses = list(expenses_to_display)
+        if len(expenses) <= 20:
+            for i, depense in enumerate(expenses):
+                self.add_expense_widget(depense, i)
+            return
+        self._render_expenses = expenses
+        self._render_index = 0
+        self._rendering_expenses = True
+        self.set_month_actions_enabled(False)
+        self.scroll_area.setEnabled(False)
+        self.show_progress_bar()
+        self._render_timer.start()
 
-   
+    @property
+    def is_rendering_expenses(self):
+        return self._rendering_expenses
+
+    def _render_expense_batch(self):
+        # Chaque lot rend la main à la boucle Qt, sans processEvents récursif.
+        deadline = time.monotonic() + 0.008
+        try:
+            end = min(self._render_index + 20, len(self._render_expenses))
+            while self._render_index < end:
+                index = self._render_index
+                self.add_expense_widget(self._render_expenses[index], index)
+                self._render_index += 1
+                if time.monotonic() >= deadline:
+                    break
+            self.update_progress_bar(int(100 * self._render_index / len(self._render_expenses)))
+            if self._render_index < len(self._render_expenses):
+                return
+            self.update_status_bar("Affichage terminé.", duration=3000)
+        except Exception:
+            logger.exception("Erreur lors de la création des lignes")
+            self.update_status_bar("Impossible d'afficher toutes les opérations.", is_error=True)
+        self._render_timer.stop()
+        self._rendering_expenses = False
+        self._render_expenses = []
+        self.scroll_area.setEnabled(True)
+        self.hide_progress_bar()
+        self.set_month_actions_enabled(True)
+
     def update_complete_display(self, display_data: Any):
         # On utilise maintenant la nouvelle méthode pour afficher les dépenses
         self.refresh_expense_list(display_data.depenses)
@@ -333,14 +376,21 @@ class BudgetView(QMainWindow):
         for i, header in enumerate(headers):
             label = QLabel(f"<b>{header}</b>")
             
-            if header in ("Nom", "Type"):
-                label.setIndent(10)
+            if header in ("N°"):
+                label.setIndent(20)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             elif header == "Actions":
+                # Décale le texte centré de 8 px vers la droite.
+                label.setContentsMargins(0, 0, 28, 0)
                 alignment = Qt.AlignmentFlag.AlignCenter
-            elif header in ("Payé", "Prêt"):
-                alignment = Qt.AlignmentFlag.AlignLeft
+            elif header in ("Payé", "Prêt", "Fixe"):
+                label.setIndent(20)
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            elif header in ("Type"):
+                label.setIndent(0)
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             else:
+                label.setIndent(8)
                 alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             
             header_layout.addWidget(label, 0, i, alignment)
@@ -432,13 +482,13 @@ class BudgetView(QMainWindow):
         type_button.setStyleSheet("QPushButton { border: none; padding-left: 5px; }") # Enlève la bordure
         type_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor)) # Montre une main au survol
         # Connexion au nouveau handler du contrôleur
-        type_button.clicked.connect(lambda _, i=index: self.controller.handle_toggle_expense_type(i))
+        type_button.clicked.connect(lambda _, d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_toggle_expense_type))
         
         nom_input = QLineEdit(depense.nom)
         nom_input.setCursorPosition(0)
         nom_input.setStyleSheet("font-size: 14px;")
         
-        montant_text = "" if depense.montant == 0.0 else str(depense.montant)
+        montant_text = "0" if depense.montant == 0.0 else str(depense.montant)
         montant_input = QLineEdit(montant_text)
         montant_input.setAlignment(Qt.AlignmentFlag.AlignRight)
         montant_input.setValidator(self.amount_validator)
@@ -519,17 +569,17 @@ class BudgetView(QMainWindow):
 
         # CONNEXIONS OPTIMISÉES:
         # Sauvegarde uniquement à la fin de l'édition / lorsqu'un choix est validé.
-        nom_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        montant_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
-        date_input.editingFinished.connect(lambda i=index: self.controller.handle_update_expense(i))
+        nom_input.editingFinished.connect(lambda d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
+        montant_input.editingFinished.connect(lambda d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
+        date_input.editingFinished.connect(lambda d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
         # Ne pas sauvegarder à chaque changement de sélection pendant le scroll de la liste.
-        cat_combo.activated.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        cat_combo.activated.connect(lambda _, d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
         
         # MODIFICATION: Les checkboxes ne déclenchent QUE la sauvegarde
         # La mise à jour live sera gérée par handle_update_expense
-        effectue_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        emprunte_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
-        fixe_check.stateChanged.connect(lambda _, i=index: self.controller.handle_update_expense(i))
+        effectue_check.stateChanged.connect(lambda _, d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
+        emprunte_check.stateChanged.connect(lambda _, d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
+        fixe_check.stateChanged.connect(lambda _, d_id=depense.id: self._dispatch_expense_action(d_id, self.controller.handle_update_expense))
         
         # MODIFICATION: Seul le montant déclenche une mise à jour live pendant la frappe
         montant_input.textChanged.connect(self.controller.handle_live_update)
@@ -541,6 +591,17 @@ class BudgetView(QMainWindow):
         self._install_row_event_filters(row_widget)
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+
+    def _dispatch_expense_action(self, depense_id: int, action):
+        """Résout l'index actuel depuis l'identifiant stable de l'opération.
+
+        Les lignes suivantes changent d'index après une suppression. Un signal
+        tardif d'une ligne déjà retirée doit être ignoré.
+        """
+        for index, row in enumerate(self.expense_rows):
+            if row.depense_id == depense_id:
+                action(index)
+                return
 
     # --- AJOUT : Nouvelle méthode pour mettre à jour une ligne spécifique ---
     def update_expense_row_display(self, index: int, new_data: dict):
@@ -705,36 +766,27 @@ Affiche les graphiques financiers.</p>
         return self.sort_options.get(current_text, "date_desc")
     
     def set_month_actions_enabled(self, enabled: bool):
-        # Cible le premier groupe (Gestion du Mois) par son nom
-        month_group = self.findChild(QGroupBox, "MonthActionsGroup")
-        if month_group:
-            month_group.setEnabled(enabled)
+        """Verrouille les actions tout en laissant la barre de progression active."""
+        if enabled and self._rendering_expenses:
+            return
 
-        # Cible le second groupe (Salaire et Actions) par son nouveau nom
-        salary_group = self.findChild(QGroupBox, "SalaryActionsGroup")
-        if salary_group:
-            salary_group.setEnabled(enabled)
-    
-        # Désactiver/Réactiver la ComboBox de sélection du mois
-        if month_group:
-            self.mois_selector_combo.setEnabled(enabled)
+        # Le conteneur central couvre également les rapports PDF, les graphiques,
+        # le Bitcoin et les champs des opérations. Les états propres des boutons
+        # sont conservés (ex. une requête Bitcoin déjà en cours).
+        self.centralWidget().setEnabled(enabled)
 
-        # Bouton "Ajouter une dépense"
-        if hasattr(self, 'btn_add_expense'):
-            self.btn_add_expense.setEnabled(enabled)
-        
-        # Bouton "Voir Graphiques"
-        if hasattr(self, 'btn_voir_graphiques'):
-            self.btn_voir_graphiques.setEnabled(enabled)
-
-        # On désactive le conteneur de la liste des dépenses, ce qui désactive
-        # TOUS ses enfants 
-        if hasattr(self, 'expenses_container'):
-            self.expenses_container.setEnabled(enabled)
-
-        if hasattr(self, 'btn_refresh_btc'):
-            self.btn_refresh_btc.setEnabled(enabled)
-
+        # Ces raccourcis appartiennent à la fenêtre, pas au conteneur central.
+        if not enabled and self._disabled_shortcuts is None:
+            self._disabled_shortcuts = [
+                shortcut for shortcut in self.findChildren(QShortcut)
+                if shortcut.isEnabled()
+            ]
+            for shortcut in self._disabled_shortcuts:
+                shortcut.setEnabled(False)
+        elif enabled and self._disabled_shortcuts is not None:
+            for shortcut in self._disabled_shortcuts:
+                shortcut.setEnabled(True)
+            self._disabled_shortcuts = None
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):
@@ -1174,8 +1226,17 @@ Affiche les graphiques financiers.</p>
     def remove_expense_widget(self, index: int):
         if 0 <= index < len(self.expense_rows):
             row_to_remove = self.expense_rows.pop(index)
+            self.selected_row_indices = [
+                i - 1 if i > index else i
+                for i in self.selected_row_indices if i != index
+            ]
+            if self.last_selected_index == index:
+                self.last_selected_index = None
+            elif self.last_selected_index is not None and self.last_selected_index > index:
+                self.last_selected_index -= 1
             row_to_remove.deleteLater()
             self._refresh_expense_line_numbers()
+            self._update_selected_rows_total()
 
     def _refresh_expense_line_numbers(self):
         for i, row_widget in enumerate(self.expense_rows):
@@ -1185,6 +1246,10 @@ Affiche les graphiques financiers.</p>
                 line_number_widget.setText(f"{i + 1:>3}")
 
     def clear_all_expenses(self):
+        self._render_timer.stop()
+        self._rendering_expenses = False
+        self._render_expenses = []
+        self.scroll_area.setEnabled(True)
         self.clear_expense_selection()
         while self.expense_rows:
             row = self.expense_rows.pop()
@@ -1227,6 +1292,8 @@ Affiche les graphiques financiers.</p>
         self.progress_bar.show()
 
     def hide_progress_bar(self):
+        if self._rendering_expenses:
+            return
         self.progress_bar.hide()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -1237,7 +1304,6 @@ Affiche les graphiques financiers.</p>
     def clear_for_loading(self, message: str = "Chargement..."):
         self.clear_all_expenses()
         self.update_status_bar(message, duration=0)
-        QApplication.processEvents()
 
     def get_excel_import_filepath(self) -> Optional[Path]:
         filepath, _ = QFileDialog.getOpenFileName(self, "Importer depuis Excel", "", "Fichiers Excel (*.xlsx);;Tous les fichiers (*.*)")
@@ -1260,5 +1326,3 @@ Affiche les graphiques financiers.</p>
             "Fichiers PDF (*.pdf);;Tous les fichiers (*.*)"
         )
         return Path(filepath) if filepath else None
-    
-    

@@ -3,22 +3,23 @@
 import logging
 from datetime import datetime
 from core.data_models import Depense
-from PyQt6.QtCore import QThread, QTimer
+from PyQt6.QtCore import QObject, QThread, QTimer, Qt, pyqtSlot
 from PyQt6.QtWidgets import QApplication
 
 # --- IMPORTS DEPUIS LA NOUVELLE STRUCTURE ---
 from core.data_models import Result
 from graph_view import GraphDialog
-from workers.task_workers import BitcoinPriceWorker, ExcelImportWorker
+from workers.task_workers import BitcoinPriceWorker, ExcelImportWorker, MonthLoadWorker
 
 logger = logging.getLogger(__name__)
 
-class BudgetController:
+class BudgetController(QObject):
     """
     Contrôleur de l'application Budget.
     Orchestre les interactions entre le modèle et la vue.
     """
     def __init__(self, model):
+        super().__init__()
         self.model = model
         self.view = None
         self.model.add_observer(self)
@@ -31,6 +32,14 @@ class BudgetController:
         self.import_worker = None
         self.btc_thread = None
         self.btc_worker = None
+        self.load_thread = None
+        self.load_worker = None
+        self._load_request_id = 0
+        self._pending_month_load = None
+        self._closing = False
+        app = QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self._shutdown_month_loading)
 
         # --- AJOUT : Timer pour la recherche différée ---
         self.search_timer = QTimer()
@@ -64,8 +73,7 @@ class BudgetController:
             self.view.apply_theme(theme)
             self.view.clear_for_loading("Chargement des données...")
         self._refresh_mois_list()
-        result = self.model.load_data_from_last_session()
-        self._handle_result(result, show_success=False)
+        self._load_mois_async(None)
         self.handle_fetch_bitcoin_price()
 
     # --- GESTIONNAIRES D'ÉVÉNEMENTS (HANDLERS) ---
@@ -287,11 +295,11 @@ class BudgetController:
             sort_key = self.view.get_sort_key()
             result = self.model.sort_depenses(sort_key)
             self._handle_result(result, show_success=False)
-            self.handle_live_update()
         finally:
             self.view.hide_progress_bar()
             self.view.set_month_actions_enabled(True)
-            self.view.update_status_bar("Tri terminé.", duration=3000)
+            if not self.view.is_rendering_expenses:
+                self.view.update_status_bar("Tri terminé.", duration=3000)
             
     def handle_export_to_json(self):
         """Gère l'export vers JSON"""
@@ -392,6 +400,9 @@ class BudgetController:
         if not self.view or not self.model.mois_actuel:
             return
 
+        if self.view.is_rendering_expenses:
+            return
+
         try:
             # Créer une liste temporaire des dépenses avec les valeurs actuelles de l'interface
             temp_expenses = []
@@ -488,8 +499,8 @@ class BudgetController:
             self.view.update_summary_display(data['summary'])
             
         elif event_type == 'expense_type_toggled':
-            # 'data' est un dictionnaire {'index': index, 'est_credit': nouvelle_valeur}
-            self.view.update_expense_row_display(data['index'], {'est_credit': data['est_credit']})
+            # Transmet aussi la catégorie pour garder la ligne synchronisée avec le modèle.
+            self.view.update_expense_row_display(data['index'], data)
 
         elif event_type == 'theme_changed':
             self.view.apply_theme(data)
@@ -502,9 +513,9 @@ class BudgetController:
             self._refresh_mois_list()
             
         elif event_type == 'mois_loaded':
-            # Pour un mois existant, le rafraîchissement complet suffit.
-            self._refresh_complete_view()
+            # La liste et les totaux ont déjà été actualisés par display_updated.
             self._refresh_mois_list()
+            self.view.scroll_expenses_to_top()
             
         elif event_type in ['mois_deleted', 'mois_duplicated', 'mois_renamed']:
             self._refresh_mois_list(select_first=True)
@@ -528,23 +539,73 @@ class BudgetController:
 
     # --- MÉTHODES PRIVÉES ---
 
-    def _load_mois_async(self, nom_mois: str):
-        """Charge les données d'un mois sans geler l'UI."""
+    def _load_mois_async(self, nom_mois):
+        """Lit les données dans un worker ; seule la dernière demande est appliquée."""
+        if self._closing:
+            return
+        self._load_request_id += 1
+        self._pending_month_load = (self._load_request_id, nom_mois)
+        self.search_timer.stop()
+        if self._update_timer:
+            self._update_timer.stop()
+            self._pending_live_update = False
         self.view.set_month_actions_enabled(False)
-        self.view.clear_for_loading(f"Chargement de '{nom_mois}'...")
+        self.view.clear_for_loading(
+            f"Chargement de '{nom_mois}'..." if nom_mois else "Chargement des données..."
+        )
         self.view.show_progress_bar(indeterminate=True)
-        self._gui_update_timer.start()  # Démarre le timer pour forcer les updates GUI
-        QApplication.processEvents()
-        def do_load():
-            try:
-                result = self.model.load_mois(nom_mois)
-                self._handle_result(result, show_success=False)
-            finally:
-                self._gui_update_timer.stop()  # Arrête le timer
-                self.view.hide_progress_bar()
-                self.view.set_month_actions_enabled(True)
-        QTimer.singleShot(50, do_load)
-        
+        if self.load_thread is None:
+            self._start_pending_month_load()
+
+    def _start_pending_month_load(self):
+        request_id, name = self._pending_month_load
+        self._pending_month_load = None
+        self.load_thread = QThread(self)
+        self.load_worker = MonthLoadWorker(self.model, name, request_id)
+        self.load_worker.moveToThread(self.load_thread)
+        self.load_thread.started.connect(self.load_worker.run)
+        self.load_worker.finished.connect(self._on_month_loaded, Qt.ConnectionType.QueuedConnection)
+        self.load_worker.finished.connect(self.load_worker.deleteLater)
+        # quit doit fonctionner même pendant l'attente à la fermeture.
+        self.load_worker.finished.connect(self.load_thread.quit, Qt.ConnectionType.DirectConnection)
+        self.load_thread.finished.connect(self._on_month_thread_finished)
+        self.load_thread.finished.connect(self.load_thread.deleteLater)
+        self.load_thread.start()
+
+    @pyqtSlot(int, Result)
+    def _on_month_loaded(self, request_id, result):
+        if self._closing or request_id != self._load_request_id:
+            return
+        try:
+            if result.is_success:
+                result = self.model.apply_loaded_mois(*result.data)
+            else:
+                # Le mois précédent reste utilisable si la lecture échoue.
+                self._refresh_complete_view()
+                self._refresh_mois_list()
+            self._handle_result(result, show_success=False)
+        except Exception as e:
+            logger.exception("Erreur lors de l'affichage du mois chargé")
+            self._handle_result(Result.error(f"Impossible d'afficher le mois : {e}"))
+        finally:
+            self.view.hide_progress_bar()
+            self.view.set_month_actions_enabled(True)
+
+    @pyqtSlot()
+    def _on_month_thread_finished(self):
+        self.load_thread = None
+        self.load_worker = None
+        if self._pending_month_load is not None and not self._closing:
+            self._start_pending_month_load()
+
+    @pyqtSlot()
+    def _shutdown_month_loading(self):
+        self._closing = True
+        self._pending_month_load = None
+        if self.load_thread is not None:
+            self.load_thread.quit()
+            self.load_thread.wait()
+
     def _refresh_complete_view(self):
         """Met à jour l'ensemble de l'affichage."""
         display_data = self.model.get_display_data()

@@ -458,35 +458,45 @@ class BudgetModel(Observable):
             logger.critical(f"Erreur inattendue lors création mois prérempli: {e}")
             return Result.error("Une erreur inattendue s'est produite")
     
-    def load_mois(self, nom: str) -> Result:
-        """Charge un mois existant"""
+    def read_mois(self, nom: Optional[str] = None) -> Result:
+        """Lit un mois sans modifier le modèle ni notifier l'interface.
+
+        Sans nom, retrouve le mois de la dernière session.
+        """
         try:
+            if nom is None:
+                nom = self._db_manager.get_config('last_mois')
+                if not nom:
+                    mois_list = self._db_manager.get_all_mois()
+                    if not mois_list:
+                        return Result.error("Aucun mois disponible. Créez un nouveau mois.")
+                    nom = mois_list[0].nom
             mois = self._db_manager.get_mois_by_name(nom)
             if not mois:
                 return Result.error(f"Mois '{nom}' non trouvé")
-            
             depenses = self._db_manager.get_depenses_by_mois(mois.id)
-            
-            self.mois_actuel = mois
-            self._depenses = depenses
-
-            self._displayed_depenses = depenses.copy()
-
-            self._current_search_term = "" # On réinitialise la recherche
-            self._refresh_displayed_expenses() # On met à jour l'affichage
-        
-            
-            self._save_last_mois(nom)
-            self.notify_observers('mois_loaded', self.mois_actuel)
-            return Result.success(f"Mois '{nom}' chargé avec succès")
-            
-        except DatabaseError as e:
-            logger.error(f"Erreur DB lors chargement mois: {e}")
-            return Result.error(f"Erreur lors du chargement: {e}")
+            return Result.success(data=(mois, depenses))
         except Exception as e:
-            logger.critical(f"Erreur inattendue lors chargement mois: {e}")
-            return Result.error("Une erreur inattendue s'est produite")
-    
+            logger.exception("Erreur lors de la lecture du mois")
+            return Result.error(f"Erreur lors du chargement: {e}")
+
+    def apply_loaded_mois(self, mois: Mois, depenses: List[Depense]) -> Result:
+        """Applique les données chargées ; à appeler dans le thread graphique."""
+        self.mois_actuel = mois
+        self._depenses = depenses
+        self._current_search_term = ""
+        self._refresh_displayed_expenses()
+        self._save_last_mois(mois.nom)
+        self.notify_observers('mois_loaded', mois)
+        return Result.success(f"Mois '{mois.nom}' chargé avec succès")
+
+    def load_mois(self, nom: str) -> Result:
+        """Version synchrone utilisée par les opérations internes du modèle."""
+        result = self.read_mois(nom)
+        if result.is_success:
+            return self.apply_loaded_mois(*result.data)
+        return result
+
     def delete_mois(self, nom: str) -> Result:
         """Supprime un mois et toutes ses dépenses"""
         try:
