@@ -95,6 +95,20 @@ pip install -r requirements.txt
 
 ## Utilisation
 
+### Maîtrise des dépenses et épargne
+
+Sélectionnez un mois puis cliquez sur **Dépenses et épargne**, à gauche de
+**Rapport PDF**. Définissez un objectif d'épargne et des plafonds par catégorie
+(0 signifie aucun plafond), puis cliquez sur **Enregistrer les objectifs de ce mois**.
+Ces objectifs sont conservés dans SQLite pour ce mois uniquement.
+
+Le panneau utilise toutes les opérations du mois, même si une recherche est
+active. Il distingue les dépenses courantes des débits de catégorie **Épargne**,
+avec des versements effectués et prévus séparés. La marge correspond aux revenus
+saisis moins les dépenses courantes et le plus grand montant entre l'objectif
+d'épargne et les versements d'épargne saisis. Elle ne représente pas le solde
+bancaire et n'inclut pas les opérations absentes de l'application.
+
 ### Lancer l'Application
 
 ```bash

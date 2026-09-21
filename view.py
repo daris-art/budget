@@ -16,6 +16,7 @@ from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QLocale, QEvent, QObject
 from PyQt6.QtGui import QFont, QDoubleValidator, QKeyEvent, QCursor, QShortcut, QKeySequence
 import logging
 from ui.custom_widgets import NoScrollComboBox
+from ui.expense_header import ExpenseHeader
 
 logger = logging.getLogger(__name__)
 
@@ -371,44 +372,8 @@ class BudgetView(QMainWindow):
         group_box = QGroupBox("Opérations")
         main_layout = QVBoxLayout()
 
-        header_layout = QGridLayout()
-        headers = ["N°", "Type", "Nom", "Montant (€)", "Date", "Catégorie", "Payé", "Prêt", "Fixe", "Actions"]
-        for i, header in enumerate(headers):
-            label = QLabel(f"<b>{header}</b>")
-            
-            if header in ("N°"):
-                label.setIndent(20)
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            elif header == "Actions":
-                # Décale le texte centré de 8 px vers la droite.
-                label.setContentsMargins(0, 0, 46, 0)
-                alignment = Qt.AlignmentFlag.AlignCenter
-            elif header in ("Payé", "Prêt", "Fixe"):
-                label.setIndent(20)
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            elif header in ("Type"):
-                label.setIndent(6)
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            elif header in ("Nom"):
-                label.setIndent(20)
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            else:
-                label.setIndent(8)
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            
-            header_layout.addWidget(label, 0, i, alignment)
-        
-        header_layout.setColumnStretch(0, 0)  # Numéro de ligne
-        header_layout.setColumnStretch(1, 0)  # Type
-        header_layout.setColumnStretch(2, 6)  # Nom
-        header_layout.setColumnStretch(3, 2)  # Montant
-        header_layout.setColumnStretch(4, 2)  # Date
-        header_layout.setColumnStretch(5, 2)  # Catégorie (réduit de 3 à 2)
-        header_layout.setColumnStretch(6, 1)  # Payé
-        header_layout.setColumnStretch(7, 1)  # Prêt
-        header_layout.setColumnStretch(8, 1)  # Fixe
-        header_layout.setColumnStretch(9, 1)  # Actions
-        main_layout.addLayout(header_layout)
+        self.expense_header = ExpenseHeader(self)
+        main_layout.addWidget(self.expense_header)
 
         self.scroll_area = ExpenseScrollArea(self) # On passe 'self' (la vue) en référence
         self.scroll_area.setWidgetResizable(True)
@@ -418,10 +383,18 @@ class BudgetView(QMainWindow):
         self.expenses_layout.setSpacing(2) 
         self.expenses_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll_area.setWidget(self.expenses_container)
+        self.expense_header.watch(self.scroll_area.viewport())
+        self.expense_header.watch(self.expenses_container)
+        self.scroll_area.horizontalScrollBar().valueChanged.connect(self.expense_header.schedule_sync)
         main_layout.addWidget(self.scroll_area)
         
         info_layout = QHBoxLayout()
         # (Label for delete info removed from UI per user request)
+
+        planning_button = QPushButton('Dépenses et épargne')
+        planning_button.setToolTip('Définir les plafonds et l’objectif d’épargne du mois entier')
+        planning_button.clicked.connect(self.controller.handle_budget_planning)
+        info_layout.addWidget(planning_button)
 
         self.btn_generate_pdf_report = QPushButton("📄 Rapport PDF")
         self.btn_generate_pdf_report.setToolTip("Créer un rapport PDF complet du mois courant")
@@ -594,6 +567,7 @@ class BudgetView(QMainWindow):
         self._install_row_event_filters(row_widget)
         self.expenses_layout.addWidget(row_widget)
         self.expense_rows.append(row_widget)
+        self.expense_header.watch(row_widget)
 
     def _dispatch_expense_action(self, depense_id: int, action):
         """Résout l'index actuel depuis l'identifiant stable de l'opération.

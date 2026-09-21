@@ -1,6 +1,7 @@
 # core/model.py
 
 import logging
+import json
 from typing import List, Optional, Tuple, Dict
 from datetime import datetime
 from pathlib import Path 
@@ -14,6 +15,22 @@ from core.services import ImportExportService, BitcoinAPIService
 logger = logging.getLogger(__name__)
 
 class BudgetModel(Observable):
+    def get_budget_plan(self):
+        if not self.mois_actuel:
+            raise ValueError('Sélectionnez un mois.')
+        raw = self._db_manager.get_config(f'budget_plan:{self.mois_actuel.id}')
+        return json.loads(raw) if raw else {'savings_goal': 0, 'limits': {}}
+
+    def save_budget_plan(self, plan):
+        if not self.mois_actuel:
+            raise ValueError('Sélectionnez un mois.')
+        self._db_manager.save_config(
+            f'budget_plan:{self.mois_actuel.id}', json.dumps(plan), strict=True)
+
+    def get_planning_expenses(self):
+        """Retourne toutes les opérations, indépendamment des filtres de la vue."""
+        return list(self._depenses)
+
     def __init__(self, db_manager: DatabaseManager, validator: DataValidator, 
                  import_export_service: ImportExportService, api_service: BitcoinAPIService):
         super().__init__()

@@ -18,6 +18,20 @@ class BudgetController(QObject):
     Contrôleur de l'application Budget.
     Orchestre les interactions entre le modèle et la vue.
     """
+    def handle_budget_planning(self):
+        if not self.model.mois_actuel:
+            self.view.show_info_message('Sélectionnez un mois pour définir vos objectifs.')
+            return
+        from ui.budget_planning import BudgetPlanningDialog
+        try:
+            dialog = BudgetPlanningDialog(
+                self.model.mois_actuel.nom, self.model.get_planning_expenses(),
+                self.model.categories, self.model.get_budget_plan(),
+                self.model.save_budget_plan, self.view)
+            dialog.exec()
+        except Exception as exc:
+            self.view.show_error_message(str(exc))
+
     def __init__(self, model):
         super().__init__()
         self.model = model

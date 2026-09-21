@@ -53,6 +53,34 @@ class ExpenseRowActionTests(unittest.TestCase):
     def stored(self):
         return {dep.id: dep for dep in self.db.get_depenses_by_mois(self.month_id)}
 
+    def test_headers_follow_columns_when_resizing_and_scrolling(self):
+        from PyQt6.QtCore import QPoint, Qt
+        self.view.show()
+        for width in (1900, 1450, 1280, 1800):
+            self.view.resize(width, 800)
+            for policy in (Qt.ScrollBarPolicy.ScrollBarAlwaysOn,
+                           Qt.ScrollBarPolicy.ScrollBarAlwaysOff):
+                self.view.scroll_area.setVerticalScrollBarPolicy(policy)
+                for _ in range(5):
+                    self.app.processEvents()
+                row = self.view.expense_rows[0]
+                for column, label in enumerate(self.view.expense_header.labels):
+                    cell = row.layout().cellRect(0, column)
+                    expected = row.mapTo(self.view, cell.topLeft()).x()
+                    actual = label.mapTo(self.view, QPoint(0, 0)).x()
+                    self.assertEqual(actual, expected)
+                    self.assertEqual(label.width(), cell.width())
+        self.view.expenses_container.setMinimumWidth(2200)
+        for _ in range(5):
+            self.app.processEvents()
+        self.view.scroll_area.horizontalScrollBar().setValue(150)
+        for _ in range(5):
+            self.app.processEvents()
+        row = self.view.expense_rows[0]
+        for column, label in enumerate(self.view.expense_header.labels):
+            expected = row.mapTo(self.view, row.layout().cellRect(0, column).topLeft()).x()
+            self.assertEqual(label.mapTo(self.view, QPoint(0, 0)).x(), expected)
+
     def test_all_editable_fields_target_remaining_operation(self):
         self.controller.handle_remove_expense_by_id(self.ids[0])
         for column, value in ((2, 'B modifiée'), (3, '25'), (4, '02/01/2026')):

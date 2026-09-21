@@ -352,7 +352,7 @@ class DatabaseManager:
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la suppression des dépenses: {e}")
     
-    def save_config(self, key: str, value: str):
+    def save_config(self, key: str, value: str, *, strict: bool = False):
         """Sauvegarde une valeur de configuration"""
         try:
             with self._get_connection() as conn:
@@ -364,6 +364,8 @@ class DatabaseManager:
                 conn.commit()
         except sqlite3.Error as e:
             logger.warning(f"Erreur lors de la sauvegarde de config: {e}")
+            if strict:
+                raise DatabaseError(f"Impossible d'enregistrer les objectifs : {e}") from e
     
     def get_config(self, key: str) -> Optional[str]:
         """Récupère une valeur de configuration"""
