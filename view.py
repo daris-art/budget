@@ -99,6 +99,7 @@ class BudgetView(QMainWindow):
         self._scroll_on_range_change = False
         self._rendering_expenses = False
         self._disabled_shortcuts = None
+        self._search_focus_to_restore = None
         self._render_expenses = []
         self._render_index = 0
         self._render_timer = QTimer(self)
@@ -747,6 +748,20 @@ Affiche les graphiques financiers.</p>
         if enabled and self._rendering_expenses:
             return
 
+        if not enabled and self.centralWidget().isEnabled():
+            focused = QApplication.focusWidget()
+            search_fields = (
+                self.search_input, self.search_date_min_input,
+                self.search_date_max_input, self.search_amount_min_input,
+                self.search_amount_max_input,
+            )
+            self._search_focus_to_restore = None
+            if focused in search_fields:
+                self._search_focus_to_restore = (
+                    focused, focused.cursorPosition(), focused.selectionStart(),
+                    len(focused.selectedText()),
+                )
+
         # Le conteneur central couvre également les rapports PDF, les graphiques,
         # le Bitcoin et les champs des opérations. Les états propres des boutons
         # sont conservés (ex. une requête Bitcoin déjà en cours).
@@ -764,6 +779,19 @@ Affiche les graphiques financiers.</p>
             for shortcut in self._disabled_shortcuts:
                 shortcut.setEnabled(True)
             self._disabled_shortcuts = None
+
+        if enabled and self._search_focus_to_restore is not None:
+            field, cursor, start, length = self._search_focus_to_restore
+            self._search_focus_to_restore = None
+            field.setFocus()
+            if length:
+                # Conserver aussi le sens de la sélection.
+                if cursor == start:
+                    field.setSelection(start + length, -length)
+                else:
+                    field.setSelection(start, length)
+            else:
+                field.setCursorPosition(cursor)
 
     def get_expense_data(self, index: int) -> Dict[str, Any]:
         if 0 <= index < len(self.expense_rows):

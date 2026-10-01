@@ -80,7 +80,8 @@ class BudgetModel(Observable):
     def _parse_search_date(self, date_text: str) -> Optional[dict]:
         """Convertit une date de recherche en dictionnaire partiel ou complet.
 
-        Retourne None si aucun élément valable n'est présent.
+        Retourne None si la date est invalide ou aucun élément valable n'est présent.
+        Les dates sans année sont validées dans l'année courante, comme les bornes.
         - jour seulement : {'day': dd, 'month': None, 'year': None, 'is_full_date': False}
         - jour+mois : {'day': dd, 'month': mm, 'year': None, 'is_full_date': False}
         - date complète : {'day': dd, 'month': mm, 'year': yyyy, 'is_full_date': True}
@@ -121,8 +122,17 @@ class BudgetModel(Observable):
                 return None
 
         if year_text.isdigit() and len(year_text) == 4:
+            if parsed['month'] is None:
+                return None
             parsed['year'] = int(year_text)
             parsed['is_full_date'] = True
+
+        if parsed['month'] is not None:
+            year = parsed['year'] if parsed['is_full_date'] else datetime.now().year
+            try:
+                datetime(year, parsed['month'], parsed['day'])
+            except ValueError:
+                return None
 
         return parsed
 

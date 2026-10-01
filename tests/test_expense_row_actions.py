@@ -208,6 +208,39 @@ class ExpenseRowActionTests(unittest.TestCase):
         self.assertTrue(self.view.progress_bar.isHidden())
         self.assertTrue(self.view.mois_selector_combo.isEnabled())
 
+    def test_date_search_restores_focus_and_cursor_after_large_render(self):
+        from PyQt6.QtTest import QTest
+        self.add_large_month()
+        self.model.load_mois('Test')
+        self.wait_for_render()
+        self.view.show()
+        self.view.activateWindow()
+        self.app.processEvents()
+        for field in (self.view.search_date_min_input, self.view.search_date_max_input):
+            with self.subTest(field=field):
+                self.view.search_date_min_input.clear()
+                self.view.search_date_max_input.clear()
+                field.setFocus()
+                field.setCursorPosition(0)
+                QTest.keyClicks(field, '0')
+                cursor = field.cursorPosition()
+                self.controller.search_timer.stop()
+                self.controller._perform_search()
+                self.assertTrue(self.view.is_rendering_expenses)
+                self.wait_for_render()
+                self.assertIs(self.app.focusWidget(), field)
+                self.assertEqual(field.cursorPosition(), cursor)
+                QTest.keyClicks(field, '1')
+                self.assertTrue(field.text().startswith('01/'))
+                self.controller.search_timer.stop()
+
+                field.setSelection(2, -2)
+                self.controller._perform_search()
+                self.wait_for_render()
+                self.assertIs(self.app.focusWidget(), field)
+                self.assertEqual(field.selectedText(), '01')
+                self.assertEqual(field.cursorPosition(), 0)
+
     def test_sort_progress_stays_visible_until_all_rows_are_built(self):
         self.add_large_month()
         self.model.load_mois('Test')

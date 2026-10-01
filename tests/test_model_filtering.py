@@ -53,6 +53,32 @@ class ModelFilteringTests(unittest.TestCase):
         noms = sorted([d.nom for d in data.depenses])
         self.assertEqual(noms, ['Loyer', 'Supermarché'])
 
+    def test_invalid_search_dates_are_ignored(self):
+        for date in ('31/02/2026', '31/04/2026', '29/02/2025',
+                     '01/01/0000', '15//2026', '31/02/', '00/01/2026',
+                     '01/13/2026'):
+            for minimum, maximum in ((date, ''), ('', date), (date, date)):
+                with self.subTest(minimum=minimum, maximum=maximum):
+                    self.model.filter_depenses('loyer', minimum, maximum, '', '')
+                    self.assertEqual([d.nom for d in self.model.get_display_data().depenses],
+                                     ['Loyer'])
+
+    def test_valid_bound_still_applies_with_invalid_other_bound(self):
+        self.model.filter_depenses('', '31/02/2026', '05/01/2026', '', '')
+        self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
+                         {'Cafe', 'Loyer', 'Supermarché'})
+
+    def test_valid_leap_day_and_partial_search_dates(self):
+        self.model.add_expense('Bissextile', '10', date_depense='29/02/2024')
+        self.model.filter_depenses('', '29/02/2024', '29/02/2024', '', '')
+        self.assertEqual([d.nom for d in self.model.get_display_data().depenses],
+                         ['Bissextile'])
+        for date in ('01//', '01/01/', '01/01/20'):
+            with self.subTest(date=date):
+                self.model.filter_depenses('', date, '', '', '')
+                self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
+                                 {'Cafe', 'Loyer'})
+
     def test_combined_filters(self):
         # text+amount filter that matches none
         self.model.filter_depenses('loyer', '', '', '0', '100')
