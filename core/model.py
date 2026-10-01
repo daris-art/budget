@@ -679,9 +679,10 @@ class BudgetModel(Observable):
             depense.id = depense_id
             
             self._depenses.append(depense)
-            # AJOUT: Ajouter aussi à la liste affichée si elle correspond aux critères de filtrage
-            if not self._current_search_term or self._current_search_term in depense.nom.lower():
-                self._displayed_depenses.append(depense)
+            # La vue ajoute toujours la nouvelle ligne pour permettre sa saisie.
+            # La conserver aussi ici, même hors filtre, jusqu'au prochain
+            # rafraîchissement : les actions utilisent les indices affichés.
+            self._displayed_depenses.append(depense)
             
             # SUPPRESSION: Plus d'appel à _refresh_displayed_expenses
             self.notify_observers('expense_added', depense)

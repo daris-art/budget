@@ -158,6 +158,30 @@ class ExpenseRowActionTests(unittest.TestCase):
         self.assertEqual(self.stored()[target_id].nom, 'Modifiée')
         self.view.show_error_message.assert_not_called()
 
+    def test_added_expense_can_be_edited_under_active_filter(self):
+        for search, expected_rows in (('B', 1), ('Absent', 0)):
+            with self.subTest(search=search):
+                self.model.filter_depenses(search, '', '', '1', '20')
+                self.assertEqual(len(self.view.expense_rows), expected_rows)
+                self.controller.handle_add_expense()
+                new_id = self.view.expense_rows[-1].depense_id
+                self.assertEqual(len(self.view.expense_rows), expected_rows + 1)
+                for column, value in ((2, 'Nouvelle dépense'), (3, '25')):
+                    field = self.widget(expected_rows, column)
+                    field.setText(value)
+                    field.editingFinished.emit()
+                self.assertEqual(self.stored()[new_id].nom, 'Nouvelle dépense')
+                self.assertEqual(self.stored()[new_id].montant, 25)
+                self.widget(expected_rows, 1).click()
+                self.assertTrue(self.stored()[new_id].est_credit)
+                self.assertEqual(self.stored()[self.ids[1]].nom, 'B')
+                self.assertEqual(self.stored()[self.ids[1]].montant, 10)
+                # Une nouvelle recherche réapplique normalement les filtres.
+                self.model.filter_depenses(search, '', '', '1', '20')
+                self.assertEqual(len(self.view.expense_rows), expected_rows)
+                self.assertIn(new_id, self.stored())
+        self.view.show_error_message.assert_not_called()
+
     def wait_for_render(self):
         deadline = time.monotonic() + 5
         while (self.view.is_rendering_expenses or self.controller.load_thread is not None) and time.monotonic() < deadline:

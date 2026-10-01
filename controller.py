@@ -542,7 +542,7 @@ class BudgetController(QObject):
             self._schedule_live_update()
             
         elif event_type == 'expense_added':
-            self.view.add_expense_widget(data, len(self.model.depenses) - 1)
+            self.view.add_expense_widget(data, len(self.view.expense_rows))
             self.view.scroll_expenses_to_bottom()
             self.view.focus_on_last_expense_name()
             # MODIFICATION: Utilise la mise à jour différée
