@@ -479,6 +479,8 @@ class BudgetController(QObject):
             price = result.data
             price_str = f"{price:,.2f} €".replace(",", " ")
             tooltip = f"Dernière mise à jour le {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}"
+            if result.message:
+                tooltip += f"\n{result.message}"
             self.view.update_bitcoin_price(price_str, tooltip)
         else:
             self.view.update_bitcoin_price("Erreur", result.error)

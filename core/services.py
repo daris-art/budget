@@ -5,6 +5,7 @@ import openpyxl
 import requests
 import datetime
 import logging
+import math
 from pathlib import Path
 from typing import List
 from dataclasses import asdict
@@ -134,25 +135,41 @@ class FixedExpenseClassifier:
 
 
 class BitcoinAPIService:
-    """Service pour récupérer le prix du Bitcoin."""
+    """Récupère le cours BTC/EUR, avec une source de secours."""
+
     def get_price(self) -> Result:
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {"ids": "bitcoin", "vs_currencies": "eur"}
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            price = data.get("bitcoin", {}).get("eur")
-            
-            if price is None:
-                return Result.error("Format de réponse de l'API inattendu.")
-            return Result.success(data=price)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erreur réseau BTC: {e}")
-            return Result.error("Erreur réseau. Vérifiez votre connexion.")
-        except Exception as e:
-            logger.error(f"Erreur API BTC: {e}")
-            return Result.error("Une erreur inattendue est survenue.")
+        providers = (
+            ("Coinbase", "https://api.coinbase.com/v2/prices/BTC-EUR/spot", None),
+            ("CoinGecko", "https://api.coingecko.com/api/v3/simple/price",
+             {"ids": "bitcoin", "vs_currencies": "eur"}),
+        )
+        for name, url, params in providers:
+            try:
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                if name == "CoinGecko":
+                    raw_price = data["bitcoin"]["eur"]
+                else:
+                    quote = data["data"]
+                    if quote["currency"] != "EUR":
+                        raise ValueError("Devise inattendue")
+                    raw_price = quote["amount"]
+                if isinstance(raw_price, bool):
+                    raise ValueError("Prix invalide")
+                price = float(raw_price)
+                if not math.isfinite(price) or price <= 0:
+                    raise ValueError("Prix invalide")
+                return Result.success(message=f"Source : {name}", data=price)
+            except requests.exceptions.RequestException as exc:
+                logger.warning("Source BTC %s indisponible : %s", name, exc)
+            except (ValueError, TypeError, KeyError, OverflowError) as exc:
+                logger.warning("Réponse BTC %s invalide : %s", name, exc)
+
+        return Result.error(
+            "Cours BTC/EUR indisponible : aucune source (CoinGecko, Coinbase) "
+            "n'a répondu avec un prix valide. Réessayez plus tard."
+        )
 
 
 class ImportExportService:
