@@ -39,12 +39,20 @@ class ModelFilteringTests(unittest.TestCase):
         self.assertEqual(len(data.depenses), 1)
         self.assertEqual(data.depenses[0].nom.lower(), 'cafe')
 
-    def test_date_filter_exact_day(self):
-        # search day 01/01 (partial day+month)
-        self.model.filter_depenses('', '01/01/2026', '', '', '')
-        data = self.model.get_display_data()
-        # expects Cafe and Loyer (both 01/01/2026)
-        self.assertEqual(len(data.depenses), 2)
+    def test_minimum_date_includes_equal_and_later_operations(self):
+        self.model.filter_depenses('', '05/01/2026', '', '', '')
+        self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
+                         {'Supermarché', 'Salaire'})
+
+    def test_maximum_date_includes_equal_and_earlier_operations(self):
+        self.model.filter_depenses('', '', '05/01/2026', '', '')
+        self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
+                         {'Cafe', 'Loyer', 'Supermarché'})
+
+    def test_date_range_includes_both_bounds(self):
+        self.model.filter_depenses('', '05/01/2026', '28/01/2026', '', '')
+        self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
+                         {'Supermarché', 'Salaire'})
 
     def test_amount_range_filter(self):
         # find expenses between 10 and 800 (should include Supermarché and Loyer)
@@ -77,7 +85,9 @@ class ModelFilteringTests(unittest.TestCase):
             with self.subTest(date=date):
                 self.model.filter_depenses('', date, '', '', '')
                 self.assertEqual({d.nom for d in self.model.get_display_data().depenses},
-                                 {'Cafe', 'Loyer'})
+                                 {d.nom for d in self.model.depenses
+                                  if datetime.strptime(d.date_depense, '%d/%m/%Y')
+                                  >= datetime(datetime.now().year, 1, 1)})
 
     def test_combined_filters(self):
         # text+amount filter that matches none

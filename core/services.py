@@ -27,7 +27,7 @@ class ImportCategoryClassifier:
         ],
         "Logement": [
             "loyer", "copropriete", "assurance habitation", "eau", "gaz", "electricite",
-            "energie", "chauffage", "immobilier", "apartement", "remboursement",
+            "energie", "chauffage", "immobilier", "apartement", "remboursement", "alsace",
             "charges courantes", "pret habitat", "electricite", "assurence habitation"
         ],
         "Transport": [
@@ -44,7 +44,7 @@ class ImportCategoryClassifier:
         ],
         "Santé": [
             "pharmacie", "docteur", "clinique", "medecin", "dentiste", "optique", "sante",
-            "hopital"
+            "hopital", "cpam", "maladie"
         ],
         "Loisirs": [
             "netflix", "spotify", "cinema", "restaurant", "bar", "festival", "loisir",
