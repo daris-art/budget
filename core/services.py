@@ -498,10 +498,14 @@ class ImportExportService:
             # Recherche de la ligne d'en-tête à partir de la ligne 10
             for i in range(1, sheet.max_row + 1): # On commence à la ligne 1 pour plus de flexibilité
                 row_values = [str(cell.value).strip() if cell.value else "" for cell in sheet[i]]
-                if "Libellé" in row_values and "Date" in row_values:
+                date_header = next(
+                    (header for header in ("Date", "Date d'opération") if header in row_values),
+                    None,
+                )
+                if "Libellé" in row_values and date_header:
                     header_row_index = i
                     col_indices["nom"] = row_values.index("Libellé")
-                    col_indices["date"] = row_values.index("Date")
+                    col_indices["date"] = row_values.index(date_header)
                     if "Débit euros" in row_values:
                         col_indices["debit"] = row_values.index("Débit euros")
                     if "Crédit euros" in row_values:
@@ -509,7 +513,10 @@ class ImportExportService:
                     break
             
             if header_row_index == -1:
-                return Result.error("En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et 'Date' existent.")
+                return Result.error(
+                    "En-tête non trouvé. Vérifiez que les colonnes 'Libellé' et "
+                    "'Date' ou 'Date d'opération' existent."
+                )
 
             # On lit d'abord toutes les lignes en mémoire pour connaître le total
             rows_to_process = list(sheet.iter_rows(min_row=header_row_index + 1))
