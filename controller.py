@@ -596,9 +596,11 @@ class BudgetController(QObject):
             if result.is_success:
                 result = self.model.apply_loaded_mois(*result.data)
             else:
-                # Le mois précédent reste utilisable si la lecture échoue.
-                self._refresh_complete_view()
-                self._refresh_mois_list()
+                # clear_for_loading() a vidé l'écran. Ne pas réafficher les
+                # données du mois précédent sous le nom du mois demandé.
+                self.view.update_status_bar(
+                    f"Échec du chargement : {result.error}", is_error=True
+                )
             self._handle_result(result, show_success=False)
         except Exception as e:
             logger.exception("Erreur lors de l'affichage du mois chargé")

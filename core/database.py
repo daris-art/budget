@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 import logging 
+from datetime import datetime
 from core.data_models import Depense, Mois, DatabaseError, Result
 from contextlib import contextmanager
 
@@ -84,6 +85,22 @@ class DatabaseManager:
                         valeur TEXT NOT NULL
                     )
                 ''')
+
+                # Convertit les dates historiques en ISO. Ce format est
+                # triable lexicographiquement et la migration est idempotente.
+                cursor.execute("SELECT id, date_depense FROM depenses")
+                for expense_id, stored_date in cursor.fetchall():
+                    if not stored_date or len(stored_date) == 10 and stored_date[4] == '-':
+                        continue
+                    try:
+                        iso_date = datetime.strptime(stored_date, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    except (TypeError, ValueError):
+                        logger.warning("Date de dépense invalide conservée (id=%s): %r", expense_id, stored_date)
+                        continue
+                    cursor.execute(
+                        'UPDATE depenses SET date_depense = ? WHERE id = ?',
+                        (iso_date, expense_id),
+                    )
                 
                 conn.commit()
         except sqlite3.Error as e:
@@ -141,7 +158,7 @@ class DatabaseManager:
                             depense.nom,
                             depense.montant,
                             depense.categorie,
-                            depense.date_depense,
+                            self._storage_date(depense.date_depense),
                             depense.est_credit,
                             depense.effectue,
                             depense.emprunte,
@@ -257,7 +274,7 @@ class DatabaseManager:
                 # On ajoute 'date_depense' et 'est_credit' à la requête SELECT
                 sql = '''
                     SELECT id, nom, montant, categorie, date_depense, est_credit, effectue, emprunte, est_fixe
-                    FROM depenses WHERE mois_id = ?
+                    FROM depenses WHERE mois_id = ? ORDER BY date_depense ASC, id ASC
                 '''
                 
                 cursor.execute(sql, (mois_id,))
@@ -271,7 +288,7 @@ class DatabaseManager:
                         nom=row[1],
                         montant=row[2],
                         categorie=row[3],
-                        date_depense=row[4],
+                        date_depense=self._display_date(row[4]),
                         est_credit=bool(row[5]), # Conversion en booléen
                         effectue=bool(row[6]),   # Conversion en booléen
                         emprunte=bool(row[7]),    # Conversion en booléen
@@ -280,6 +297,28 @@ class DatabaseManager:
                 return depenses
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la récupération des dépenses: {e}")
+
+    @staticmethod
+    def _storage_date(date_value: str) -> str:
+        """Normalise une date d'interface (JJ/MM/AAAA) en ISO pour SQLite."""
+        if not date_value:
+            return date_value
+        try:
+            return datetime.strptime(date_value, '%d/%m/%Y').strftime('%Y-%m-%d')
+        except (TypeError, ValueError):
+            # Tolère également les valeurs ISO déjà transmises par un import.
+            try:
+                return datetime.strptime(date_value, '%Y-%m-%d').strftime('%Y-%m-%d')
+            except (TypeError, ValueError):
+                return date_value
+
+    @staticmethod
+    def _display_date(date_value: str) -> str:
+        """Convertit les dates ISO de la base au format historique de l'UI."""
+        try:
+            return datetime.strptime(date_value, '%Y-%m-%d').strftime('%d/%m/%Y')
+        except (TypeError, ValueError):
+            return date_value or ''
         
     def create_depense(self, mois_id: int, depense: Depense) -> int:
         """Crée une nouvelle dépense dans la base de données et retourne son ID."""
@@ -302,7 +341,7 @@ class DatabaseManager:
                     depense.nom,
                     depense.montant,
                     depense.categorie,
-                    depense.date_depense,
+                    self._storage_date(depense.date_depense),
                     depense.est_credit,
                     depense.effectue,
                     depense.emprunte,
@@ -328,7 +367,7 @@ class DatabaseManager:
                     WHERE id = ?
                 '''
                 values = (
-                    depense.nom, depense.montant, depense.categorie, depense.date_depense,
+                    depense.nom, depense.montant, depense.categorie, self._storage_date(depense.date_depense),
                     depense.effectue, depense.emprunte, depense.est_credit, depense.est_fixe,
                     depense.id
                 )
@@ -431,7 +470,7 @@ class DatabaseManager:
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         '''
                         values = (
-                            new_mois_id, depense[1], depense[2], depense[3], depense[4],
+                            new_mois_id, depense[1], depense[2], depense[3], self._storage_date(depense[4]),
                             bool(depense[5]), bool(depense[6]), bool(depense[7]), bool(depense[8])
                         )
                         cursor.execute(sql, values)
@@ -473,7 +512,7 @@ class DatabaseManager:
                         '''
                         values = (
                             new_mois_id, dep.nom, dep.montant, dep.categorie,
-                            dep.date_depense, dep.est_credit, dep.effectue, dep.emprunte,
+                            self._storage_date(dep.date_depense), dep.est_credit, dep.effectue, dep.emprunte,
                             dep.est_fixe
                         )
                         cursor.execute(sql, values)
