@@ -469,12 +469,23 @@ class ImportExportService:
                 return Result.error("Structure JSON invalide : clé 'depenses' manquante.")
 
             salaire = data.get('mois', {}).get('salaire', 0.0)
+            if isinstance(salaire, bool):
+                return Result.error("Le salaire du fichier JSON est invalide.")
+            salaire = float(salaire)
+            if not math.isfinite(salaire) or salaire < 0:
+                return Result.error("Le salaire du fichier JSON est invalide.")
             
             depenses_a_importer = []
             for dep_data in data['depenses']:
+                raw_amount = dep_data.get('montant', 0.0)
+                if isinstance(raw_amount, bool):
+                    return Result.error("Un montant du fichier JSON est invalide.")
+                amount = float(raw_amount)
+                if not math.isfinite(amount) or amount < 0:
+                    return Result.error("Un montant du fichier JSON est invalide.")
                 depenses_a_importer.append(Depense(
                     nom=dep_data.get('nom', 'Dépense sans nom'),
-                    montant=dep_data.get('montant', 0.0),
+                    montant=amount,
                     categorie=dep_data.get('categorie', 'Autres'),
                     date_depense=dep_data.get('date_depense', datetime.datetime.now().strftime('%d/%m/%Y')),
                     est_credit=dep_data.get('est_credit', False),

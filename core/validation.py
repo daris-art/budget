@@ -2,6 +2,7 @@
 
 from core.data_models import ValidationResult
 import datetime
+import math
 
 class DataValidator:
     """Validation centralisée des données de l'application."""
@@ -18,7 +19,9 @@ class DataValidator:
         
         try:
             validated_salaire = float(salaire.replace(',', '.')) if salaire else 0.0
-            if validated_salaire < 0:
+            if not math.isfinite(validated_salaire):
+                errors.append("Le salaire doit être un nombre fini")
+            elif validated_salaire < 0:
                 errors.append("Le salaire ne peut pas être négatif")
             validated_data['salaire'] = validated_salaire
         except (ValueError, AttributeError):
@@ -40,7 +43,9 @@ class DataValidator:
         
         try:
             validated_montant = float(montant.replace(',', '.')) if montant else 0.0
-            if validated_montant < 0:
+            if not math.isfinite(validated_montant):
+                errors.append("Le montant doit être un nombre fini")
+            elif validated_montant < 0:
                 errors.append("Le montant ne peut pas être négatif")
             validated_data['montant'] = validated_montant
         except (ValueError, AttributeError):
