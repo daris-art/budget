@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.daris_art.Budget</id>
+  <name>Budget</name>
+  <name xml:lang="fr">Budget</name>
+  <summary>Gestion personnelle de budget</summary>
+  <summary xml:lang="fr">Gestion personnelle de budget</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>Daris</developer_name>
+  <launchable type="desktop-id">io.github.daris_art.Budget.desktop</launchable>
+  <description>
+    <p>Application de gestion des dépenses, budgets, rapports PDF et épargne.</p>
+  </description>
+  <categories>
+    <category>Office</category>
+    <category>Finance</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Budget
+Name[fr]=Budget
+Comment=Gestion personnelle de budget
+Comment[fr]=Gestion personnelle de budget
+Exec=budget
+Icon=io.github.daris_art.Budget
+Terminal=false
+Type=Application
+Categories=Office;Finance;Qt;
+StartupNotify=true

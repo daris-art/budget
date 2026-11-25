@@ -137,6 +137,28 @@ class FixedExpenseClassifier:
 class BitcoinAPIService:
     """Récupère le cours BTC/EUR, avec une source de secours."""
 
+    @staticmethod
+    def _extract_eur_price(data: object) -> object:
+        """Extrait un prix BTC/EUR depuis les formats Coinbase ou CoinGecko.
+
+        Le format est détecté à partir de la réponse plutôt que du fournisseur
+        configuré. Cela évite qu'une API/proxy renvoie un format différent et
+        rend le fallback réellement indépendant de l'ordre des sources.
+        """
+        if not isinstance(data, dict):
+            raise ValueError("Réponse JSON invalide")
+
+        if "data" in data:
+            quote = data["data"]
+            if not isinstance(quote, dict) or quote.get("currency") != "EUR":
+                raise ValueError("Devise inattendue")
+            return quote["amount"]
+
+        bitcoin = data.get("bitcoin")
+        if not isinstance(bitcoin, dict):
+            raise ValueError("Prix Bitcoin absent")
+        return bitcoin["eur"]
+
     def get_price(self) -> Result:
         providers = (
             ("Coinbase", "https://api.coinbase.com/v2/prices/BTC-EUR/spot", None),
@@ -147,14 +169,7 @@ class BitcoinAPIService:
             try:
                 response = requests.get(url, params=params, timeout=10)
                 response.raise_for_status()
-                data = response.json()
-                if name == "CoinGecko":
-                    raw_price = data["bitcoin"]["eur"]
-                else:
-                    quote = data["data"]
-                    if quote["currency"] != "EUR":
-                        raise ValueError("Devise inattendue")
-                    raw_price = quote["amount"]
+                raw_price = self._extract_eur_price(response.json())
                 if isinstance(raw_price, bool):
                     raise ValueError("Prix invalide")
                 price = float(raw_price)

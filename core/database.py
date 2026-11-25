@@ -1,6 +1,7 @@
 # core/database.py
 
 import sqlite3
+import os
 from pathlib import Path
 from typing import List, Optional
 import logging 
@@ -16,7 +17,11 @@ class DatabaseManager:
         if db_path:
             self.db_path = db_path
         else:
-            app_dir = Path.home() / ".BudgetApp"
+            if os.environ.get("FLATPAK_ID"):
+                data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+                app_dir = data_root / "BudgetApp"
+            else:
+                app_dir = Path.home() / ".BudgetApp"
             app_dir.mkdir(parents=True, exist_ok=True)
             self.db_path = app_dir / "budget.db"
         self._init_database()

@@ -31,7 +31,12 @@ class BitcoinPriceWorker(QObject):
         self.model = model
 
     def run(self):
-        result = self.model.get_bitcoin_price()
+        try:
+            result = self.model.get_bitcoin_price()
+        except Exception as exc:
+            # Garantit l'émission du signal, même si une erreur inattendue
+            # survient hors des cas déjà gérés par BitcoinAPIService.
+            result = Result.error(f"Erreur lors de la récupération du Bitcoin : {exc}")
         self.finished.emit(result)
 
 class ExcelImportWorker(QObject):

@@ -1,0 +1,36 @@
+app-id: io.github.daris_art.Budget
+runtime: org.kde.Platform
+runtime-version: "6.9"
+sdk: org.kde.Sdk
+command: budget
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --share=network
+  # QFileDialog is used for Excel/JSON/PDF files. Allow the user to select
+  # files from their home directory, including Documents and Downloads.
+  - --filesystem=home
+modules:
+  - name: budget
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - .git
+          - venv
+          - __pycache__
+          - tests
+    build-commands:
+      - python3 -m pip install --no-cache-dir --prefix=/app -r requirements.txt
+      - install -d /app/share/budget
+      - cp -a main.py controller.py view.py graph_view.py migrate_json_to_sqlite.py core ui workers /app/share/budget/
+      - install -Dm755 flatpak/budget /app/bin/budget
+      - install -Dm644 flatpak/io.github.daris_art.Budget.desktop /app/share/applications/io.github.daris_art.Budget.desktop
+      - install -Dm644 flatpak/io.github.daris_art.Budget.svg /app/share/icons/hicolor/scalable/apps/io.github.daris_art.Budget.svg
+      - install -Dm644 flatpak/io.github.daris_art.Budget.metainfo.xml /app/share/metainfo/io.github.daris_art.Budget.metainfo.xml

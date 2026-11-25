@@ -1,6 +1,7 @@
 # core/model.py
 
 import logging
+import os
 import json
 from typing import List, Optional, Tuple, Dict
 from datetime import datetime
@@ -342,7 +343,11 @@ class BudgetModel(Observable):
     def _get_database_path(self) -> Path:
         """Retourne le chemin vers la base de données"""
         try:
-            data_dir = Path.home() / ".BudgetApp"
+            if os.environ.get("FLATPAK_ID"):
+                data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+                data_dir = data_root / "BudgetApp"
+            else:
+                data_dir = Path.home() / ".BudgetApp"
             data_dir.mkdir(exist_ok=True)
             return data_dir / "budget.db"
         except Exception:

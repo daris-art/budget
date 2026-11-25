@@ -84,6 +84,31 @@ cd budget
 pip install -r requirements.txt
 ```
 
+### Installation Flatpak
+
+Le manifeste Flatpak se trouve dans `flatpak/io.github.daris_art.Budget.yml`.
+Avec Flatpak et Flatpak Builder installés, construisez puis installez
+l'application depuis la racine du projet :
+
+```bash
+flatpak install flathub org.kde.Sdk//6.9 org.kde.Platform//6.9
+flatpak-builder --user --install --force-clean build-dir \
+  flatpak/io.github.daris_art.Budget.yml
+flatpak run io.github.daris_art.Budget
+```
+
+Pour produire un fichier installable et le distribuer :
+
+```bash
+flatpak-builder --user --repo=repo --force-clean build-dir \
+  flatpak/io.github.daris_art.Budget.yml
+flatpak build-bundle repo Budget.flatpak io.github.daris_art.Budget
+```
+
+Les données de l'application sont stockées dans le répertoire de données
+Flatpak de l'utilisateur. Les dépendances Python sont installées dans le
+paquet lors de sa construction.
+
 ## Dépendances
 
 - **PyQt6**: Framework d'interface graphique
