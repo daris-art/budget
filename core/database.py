@@ -372,7 +372,14 @@ class DatabaseManager:
                     depense.id
                 )
                 cursor.execute(sql, values)
+                if cursor.rowcount == 0:
+                    raise DatabaseError(
+                        f"Impossible de mettre à jour la dépense : "
+                        f"aucune dépense avec l'identifiant {depense.id}."
+                    )
                 conn.commit()
+        except DatabaseError:
+            raise
         except sqlite3.Error as e:
             raise DatabaseError(f"Erreur lors de la mise à jour de la dépense: {e}")
             

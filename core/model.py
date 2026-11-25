@@ -335,23 +335,24 @@ class BudgetModel(Observable):
     def initialize_backend(self):
         """Initialise les composants du backend."""
         if not self._db_manager:
-            self._db_manager = DatabaseManager(self.db_path)
+            self._db_manager = DatabaseManager(self._get_database_path())
             self._validator = DataValidator()
             self._import_export_service = ImportExportService(self._db_manager)
             logger.info("Backend initialisé.")
 
     def _get_database_path(self) -> Path:
         """Retourne le chemin vers la base de données"""
+        if os.environ.get("FLATPAK_ID"):
+            data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            data_dir = data_root / "BudgetApp"
+        else:
+            data_dir = Path.home() / ".BudgetApp"
+
         try:
-            if os.environ.get("FLATPAK_ID"):
-                data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-                data_dir = data_root / "BudgetApp"
-            else:
-                data_dir = Path.home() / ".BudgetApp"
-            data_dir.mkdir(exist_ok=True)
-            return data_dir / "budget.db"
-        except Exception:
-            return Path("budget.db")
+            data_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise OSError(f"Impossible de créer le répertoire de données {data_dir}: {exc}") from exc
+        return data_dir / "budget.db"
     
     # ===== PROPRIÉTÉS =====
     @property
@@ -718,6 +719,18 @@ class BudgetModel(Observable):
         if not original_depense:
             return Result.error("Impossible de trouver la dépense originale à mettre à jour.")
 
+        original_values = (
+            original_depense.nom, original_depense.montant, original_depense.categorie,
+            original_depense.date_depense, original_depense.effectue,
+            original_depense.emprunte, original_depense.est_fixe, original_depense.est_credit,
+        )
+        displayed_depense = self._displayed_depenses[index]
+        displayed_values = (
+            displayed_depense.nom, displayed_depense.montant, displayed_depense.categorie,
+            displayed_depense.date_depense, displayed_depense.effectue,
+            displayed_depense.emprunte, displayed_depense.est_fixe, displayed_depense.est_credit,
+        )
+
         validation = self._validator.validate_expense_data(nom, montant_str, date_depense, categorie)
         if not validation.is_valid:
             return Result.error("\n".join(validation.errors))
@@ -744,7 +757,6 @@ class BudgetModel(Observable):
         try: 
             # MODIFICATION CRUCIALE: On met aussi à jour la liste affichée
             # pour que les deux listes restent synchronisées
-            displayed_depense = self._displayed_depenses[index]
             displayed_depense.nom = validation.validated_data['nom']
             displayed_depense.montant = validation.validated_data['montant']
             displayed_depense.categorie = validation.validated_data['categorie']
@@ -766,6 +778,12 @@ class BudgetModel(Observable):
             
             return Result.success()
         except DatabaseError as e:
+            (original_depense.nom, original_depense.montant, original_depense.categorie,
+             original_depense.date_depense, original_depense.effectue,
+             original_depense.emprunte, original_depense.est_fixe, original_depense.est_credit) = original_values
+            (displayed_depense.nom, displayed_depense.montant, displayed_depense.categorie,
+             displayed_depense.date_depense, displayed_depense.effectue,
+             displayed_depense.emprunte, displayed_depense.est_fixe, displayed_depense.est_credit) = displayed_values
             return Result.error(str(e))
             
     def remove_expense(self, index: int) -> Result:
@@ -1083,6 +1101,8 @@ class BudgetModel(Observable):
 
         # On inverse la valeur booléenne
         new_status = not original_depense.est_credit
+        old_original_category = original_depense.categorie
+        old_displayed_category = depense_to_toggle.categorie
         original_depense.est_credit = new_status
         depense_to_toggle.est_credit = new_status # On s'assure que les deux listes sont synchronisées
 
@@ -1110,4 +1130,6 @@ class BudgetModel(Observable):
             # En cas d'erreur de la base de données, on annule le changement en mémoire
             original_depense.est_credit = not new_status
             depense_to_toggle.est_credit = not new_status
+            original_depense.categorie = old_original_category
+            depense_to_toggle.categorie = old_displayed_category
             return Result.error(str(e))
